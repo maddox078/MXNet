@@ -1,0 +1,391 @@
+using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.Linq;
+using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
+using System.Text;
+using System.Threading.Tasks;
+using System.Xml.Serialization;
+
+namespace MaddoxNET
+{
+    public class CNN
+    {
+        public ANN_Perf NeuralNetwork;
+        public int Convolutions = 1;
+        public int ColorChannels = 3;
+        public List<List<List<double>>> Filters = new List<List<List<double>>>();
+        public int ImageDimensions = 0;
+        public List<List<List<double>>> ConvolutedFeatures = new List<List<List<double>>>();
+        public List<List<List<double>>> Features = new List<List<List<double>>>();
+        public int InputCount = 0;
+        public int KernelSize = 0;
+        public double ReLUConst = 0.2;
+
+        public CNN(List<int> LayerCounts,List<int> ActivationFunctionIDs,int LossFunctionMethodID, int ImageDim, int ConvolutionCount,int KernelSize, double LearningRate,double MomentumFactor)
+        {
+            List<double> TempList = new List<double>();
+            List<double> TempList2 = new List<double>();
+            List<List<double>> PrimaryFilter = new List<List<double>>();
+            int X = 0;
+            double TempVal = ImageDim;
+
+            this.ImageDimensions = ImageDim;
+            this.Convolutions = ConvolutionCount;
+            this.KernelSize = KernelSize;            
+
+            this.NeuralNetwork = new ANN_Perf(LayerCounts,ActivationFunctionIDs,LossFunctionMethodID, LearningRate,MomentumFactor);
+        }
+
+        public List<double> GenerateNoiseSample(int Size)
+        {
+            Random Rnd = new Random(System.DateTime.Now.Millisecond * System.DateTime.Now.Second * System.DateTime.Now.Minute);
+            int X = 0;
+            List<double> RetVal = new List<double>();
+
+            while (X < Size)
+            {
+                RetVal.Add(Rnd.NextDouble() % 0.255);
+
+                X++;
+            }
+
+            return RetVal;
+        }
+
+
+        public List<double> ProcessInputs(List<List<double>> Input,int KernelSize,bool AvgLayer,List<List<List<double>>> FilterList)
+        {
+            List<double> ProcessedInput = new List<double>();
+            List<List<double>> PooledConvs = new List<List<double>>();
+            List<List<double>> Convolution = new List<List<double>>();
+            int X = 0;
+            int Y = 0;
+            int Z = 0;
+            int ZZ = 0;
+            int A = 0;
+            int B = 0;
+            int C = 0;
+            double TempVal = 0;
+            double MaxVal = 0;
+            double AvgVal = 0;
+            List<List<double>> NewInput = new List<List<double>>();
+            List<List<double>> FinalOutput = new List<List<double>>();
+            List<double> TempList = new List<double>();
+            List<List<double>> TempList2 = new List<List<double>>();
+            List<List<List<double>>> FeatureMaps = new List<List<List<double>>>();
+
+            this.ConvolutedFeatures = new List<List<List<double>>>();
+
+            ZZ = 0;
+            while (ZZ < FilterList.Count)
+            {
+
+                FinalOutput = new List<List<double>>();
+                X = 0;
+                while (X < Input.Count)
+                {
+                    TempList = new List<double>();
+                    Y = 0;
+                    while (Y < Input[X].Count)
+                    {
+                        //TempList = new List<double>();
+                        TempVal = 0;
+                        A = 0;
+                        while (A < FilterList[ZZ].Count)
+                        {
+                            B = 0;
+                            while (B < FilterList[ZZ].Count)
+                            {
+                                if (X + A < Input.Count && Y + B < Input[X].Count)
+                                {
+                                    TempVal += Input[X + A][Y + B] * FilterList[ZZ][A][B];
+                                }
+
+
+                                B++;
+                            }
+
+                            A++;
+                        }
+
+                        //TempVal /= (A * B);
+
+                        TempList.Add((TempVal));
+
+                        Y += 1;
+                    }
+
+                    FinalOutput.Add(TempList);
+
+                    X += 1;
+                }
+
+                Input = FinalOutput;
+
+                ZZ++;
+            }
+            //FinalOutput = new List<List<double>>();
+            PooledConvs = new List<List<double>>();
+
+            X = 0;
+            while (X < FinalOutput.Count)
+            {
+                TempList = new List<double>();
+                Y = 0;
+                while (Y < FinalOutput[X].Count)
+                {
+                    MaxVal = FinalOutput[X][Y];
+                    AvgVal = 0;
+                    A = 0;
+                    while (A < KernelSize)
+                    {
+                        B = 0;
+                        while (B < KernelSize)
+                        {
+                            if (X + A < FinalOutput.Count && Y + B < FinalOutput[X].Count)
+                            {
+                                if (FinalOutput[X + A][Y + B] > MaxVal)
+                                {
+                                    MaxVal = FinalOutput[X + A][Y + B];
+                                    AvgVal += FinalOutput[X + A][Y + B];
+                                }
+                            }
+
+                            B++;
+                        }
+
+                        A++;
+                    }
+
+                    AvgVal /= (KernelSize * KernelSize);
+
+                    if(AvgLayer)
+                    {
+                        TempList.Add(this.ReLU(AvgVal, true));
+                    }
+                    else
+                    {
+                        TempList.Add(this.ReLU(MaxVal, true));
+                    }
+                    
+
+                    Y += KernelSize;
+
+                }
+
+
+                PooledConvs.Add(TempList);
+
+
+                X += KernelSize;
+            }
+
+            FinalOutput = PooledConvs;
+
+                
+
+            TempList = this.Flatten2DVector(FinalOutput);
+
+            return TempList;
+        }
+
+        public List<double> Flatten3DVector(List<List<List<double>>> Input)
+        {
+            int X = 0;
+            int Y = 0;
+            int Z = 0;
+            List<double> RetVal = new List<double>();
+
+            while(X < Input.Count)
+            {
+                Y = 0;
+                while (Y < Input[X].Count)
+                {
+                    Z = 0;
+                    while(Z < Input[X][Y].Count)
+                    {
+                        RetVal.Add(Input[X][Y][Z]);
+
+                        Z++;
+                    }
+
+                    Y++;
+                }
+
+                X++;
+            }
+
+            return RetVal;
+        }
+
+        public List<double> Flatten2DVector(List<List<double>> Input)
+        {
+            int X = 0;
+            int Y = 0;
+            List<double> Output = new List<double>();
+
+            while(X < Input.Count)
+            {
+                Y = 0;
+                while(Y < Input[X].Count)
+                {
+                    Output.Add(Input[X][Y]);
+
+                    Y++;
+                }
+
+                X++;
+            }
+
+            return Output;
+        }
+
+        public List<List<double>> ExpandVector(List<double> Input)
+        {
+            List<List<double>> FinalOutput = new List<List<double>>();
+            List<List<double>> Output = new List<List<double>>();
+            List<double> SubOutput = new List<double>();
+            int X = 0;
+            int Y = 0;
+            int Z = 0;
+
+            //This needs to make an x y grid of rgbs
+            while (Z < Input.Count)
+            {
+                X = 0;
+
+                SubOutput.Add(Input[Z]);
+
+                if ((Z + 1) % (int)(Math.Sqrt(Input.Count)) == 0 && Z != 0)
+                {
+                    FinalOutput.Add(SubOutput);
+                    SubOutput = new List<double>();
+                }
+
+                Z++;
+            }
+
+            return FinalOutput;
+        }
+
+        public Bitmap ArrayToBMP(List<double> Input)
+        {
+            int ImageDim = (int)(Math.Round(Math.Sqrt(Input.Count),MidpointRounding.AwayFromZero));
+            Bitmap RetVal = new Bitmap(ImageDim,ImageDim);
+            int X = 0;
+            int Y = 0;
+            int RGB = 0;
+            int RVal = 0;
+            int GVal = 0;
+            int BVal = 0;
+            int NewX = 0;
+            int NewY = 0;
+            double TempVal = 0;
+            double MinVal = Input[0];
+
+            X = 0;
+            while (X < Input.Count)
+            {
+                NewX = X % ImageDim;
+                NewY = (int)(X / ImageDim);
+                RGB = Math.Max(0, Math.Min(255, (int)Math.Abs(Input[X])));
+
+                RGB = 255 - RGB;
+
+
+                if (NewX < RetVal.Width && NewY < RetVal.Height)
+                {
+                    //RetVal.SetPixel(NewX, NewY, Color.FromArgb(RGB, RGB, RGB));
+
+                    RetVal.SetPixel(NewX, NewY, Color.FromArgb(RGB,RGB,RGB));
+                }
+
+
+                if (Input[X] < MinVal)
+                {
+                    MinVal = Input[X];
+                }
+
+                X += 1;
+            }
+
+
+            Debug.Print(MinVal.ToString());
+
+            return RetVal;
+        }
+
+        public List<List<double>> BMPToArray(Bitmap Input)
+        {
+            int X = 0;
+            int Y = 0;
+            int Z = 0;
+            List<double> TempRow = new List<double>();
+            List<List<double>> TempRow2 = new List<List<double>>();
+            List<List<double>> RetVal = new List<List<double>>();
+
+            X = 0;
+            TempRow2 = new List<List<double>>();
+            while (X < Input.Height)
+            {
+                Y = 0;
+                TempRow = new List<double>();
+                while (Y < Input.Width)
+                {
+                    TempRow.Add(((((Input.GetPixel(Y, X).R + Input.GetPixel(Y, X).G + Input.GetPixel(Y, X).B) / 3) * 0.001) ));
+                    
+                    Y++;
+                }
+
+                RetVal.Add(TempRow);
+
+                X++;
+            }
+
+            return RetVal;
+        }
+
+
+        public double ReLU(double Input,bool LeakyReLU)
+        {
+            double TempVal = 0;
+
+            if(LeakyReLU)
+            {                
+                if (Input >= 0)
+                {
+                    TempVal = Input;
+                }
+                else
+                {
+                    TempVal = Input * this.NeuralNetwork.ReLUConst;
+                }
+            }
+            else
+            {
+                if (Input >= 0)
+                {
+                    TempVal = Input;
+                }
+                else
+                {
+                    TempVal = 0;
+                }
+            }
+            
+
+            return TempVal;
+        }
+
+        public double Sigmoid(double Input)
+        {
+            double TempVal = 0;
+
+            TempVal = 1 / (1 + Math.Pow(Math.E, -1 * Input));
+
+            return TempVal;
+        }
+    }
+}
