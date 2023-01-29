@@ -1,0 +1,379 @@
+#include <vector>
+#include <iostream>
+
+using namespace std;
+
+#pragma once
+class ANN
+{
+	public:
+		vector<vector<vector<float>>> Weights = vector<vector<vector<float>>>();
+		vector<vector<vector<float>>> PrevWeights = vector<vector<vector<float>>>();
+		vector<vector<float>> Activations = vector<vector<float>>();
+		vector<vector<float>> NetInputs = vector<vector<float>>();
+		vector<vector<float>> Errors = vector<vector<float>>();
+		vector<int> ActivationFunctions = vector<int>();
+		float LearningRate = 0;
+		float Momentum = 0;
+		float ReLUConst = 0;
+
+		//LayerCounts - contains the number of neurons for each layer, layer is derived from ordinality in list
+		//ActivationFunctions - contains integer IDs of the activation function to use for each layer, layer is derived from ordinality in list
+		//LearnRate - how much of the gradient delta to keep (decimal %) ie: 0.001
+		//MomentumFactor - how much of the PREVIOUS gradient delta for each weight to add to current gradient delta (decimal %) ie: 0.01
+
+		void Initialize(vector<int> LayerCounts,vector<int> ActivationFunctions, float LearnRate, float MomentumFactor)
+		{
+			int X = 0;
+			int Y = 0;
+			int Z = 0;
+			vector<float> LayerActivations = vector<float>();
+			vector<float> LayerNetInputs = vector<float>();
+			vector<float> LayerError = vector<float>();
+			vector<vector<float>> LayerWeights = vector<vector<float>>();
+			vector<float> NeuronWeights = vector<float>();
+			vector<vector<float>> PrevLayerWeights = vector<vector<float>>();
+			vector<float> PrevNeuronWeights = vector<float>();
+
+			//Seed randomization
+			srand(static_cast <unsigned> (time(0)));
+
+			this->Momentum = MomentumFactor;
+			this->LearningRate = LearnRate;
+			this->ActivationFunctions = ActivationFunctions;
+
+			//Layer
+			while (X < LayerCounts.size())
+			{
+				PrevLayerWeights = vector<vector<float>>();
+				LayerWeights = vector<vector<float>>();
+				LayerActivations = vector<float>();
+				LayerNetInputs = vector<float>();
+				LayerError = vector<float>();
+
+				//Neuron
+				Y = 0;
+				while (Y < LayerCounts[X])
+				{
+					NeuronWeights = vector<float>();
+					PrevNeuronWeights = vector<float>();
+
+					LayerActivations.push_back(0);
+					LayerNetInputs.push_back(0);
+					LayerError.push_back(0);
+
+					//Dendrite
+					Z = 0;
+					while (Z < LayerCounts[max(0, X - 1)])
+					{
+						NeuronWeights.push_back(RandFloat());
+						PrevNeuronWeights.push_back(0);
+
+						Z++;
+					}
+
+					LayerWeights.push_back(NeuronWeights);
+					PrevLayerWeights.push_back(PrevNeuronWeights);
+
+					Y++;
+				}
+
+				this->Activations.push_back(LayerActivations);
+				this->NetInputs.push_back(LayerNetInputs);
+				this->Errors.push_back(LayerError);
+				this->Weights.push_back(LayerWeights);
+				this->PrevWeights.push_back(PrevLayerWeights);
+
+				X++;
+			}
+
+		}
+
+		//Acquires network output ie: predictions, classifications, etc
+		void ForwardPropagate(vector<float> Inputs)
+		{
+			int X = 0;
+			int Y = 0;
+			int Z = 0;
+			float NetSignal = 0;
+
+			while (X < this->Activations[0].size())
+			{
+				this->NetInputs[0][X] = Inputs[X];
+				this->Activations[0][X] = this->ActivationFunction(Inputs[X], this->ActivationFunctions[0]);
+
+				X++;
+			}
+
+			X = 1;
+			while (X < this->Activations.size())
+			{
+				Y = 0;
+				while (Y < this->Activations[X].size())
+				{
+					NetSignal = 0;
+					Z = 0;
+					while (Z < this->Activations[max(0, X - 1)].size())
+					{
+						NetSignal += (this->Weights[X][Y][Z] * this->NetInputs[max(0, X - 1)][Z]);
+
+						Z++;
+					}
+
+					//Averaging the output isn't directly necessary but seems to help with exploding values where data scaling is poor
+					NetSignal /= Z;
+
+					this->NetInputs[X][Y] = NetSignal;
+					this->Activations[X][Y] = this->ActivationFunction(NetSignal, this->ActivationFunctions[X]);
+
+					Y++;
+				}
+
+				//Don't want to normalize output layer
+				if (X < this->Activations.size() - 1)
+				{
+					this->Activations[X] = NormalizeDataSet(this->Activations[X]);
+				}
+
+				X++;
+			}
+			
+		}
+
+		//The actual 'learning' part of the process, the primary purpose is solely to update the weight values based on error and a few other factors
+		void BackPropagate(vector<float> Inputs, vector<float> Outputs, bool TrainWeights)
+		{
+			int X = 0;
+			int Y = 0;
+			int Z = 0;
+			float Delta = 0;
+
+			//Input values must always be passed forward first so error can be calculated
+			ForwardPropagate(Inputs);
+
+			//Error is calculated only at the output layer, for subsequent layers it is derived using derivatives and previously calculated errors
+			while (X < this->Activations[this->Activations.size() - 1].size())
+			{
+				//In this case we are using raw error, usually you'll see mean squared error but this works fine 
+				this->Errors[this->Errors.size() - 1][X] = this->Activations[this->Activations.size() - 1][X] - Outputs[X];
+
+				Y = 0;
+				while (Y < this->Weights[this->Weights.size() - 1][X].size())
+				{
+					//Error * Der(Current Neuron value) * Neuron Value of corresponding neuron of the current weight in previous layer
+					Delta = this->Errors[this->Errors.size() - 1][X] * ActivationFunctionDerivative(this->Activations[this->Activations.size() - 1][X], this->ActivationFunctions[this->ActivationFunctions.size() - 1]) * this->Activations[this->Activations.size() - 2][Y];
+
+					//If training enabled this performs the actual weight updates for the output layer
+					if (TrainWeights)
+					{
+						this->Weights[this->Weights.size() - 1][X][Y] -= ((Delta * this->LearningRate) + (this->Momentum * this->PrevWeights[this->PrevWeights.size() - 1][X][Y]));
+						this->PrevWeights[this->PrevWeights.size() - 1][X][Y] = Delta;
+					}
+
+					Y++;
+				}
+
+				X++;
+			}
+
+			X = this->Activations.size() - 2;
+
+			while (X >= 0)
+			{
+				Y = 0;
+				while (Y < this->Activations[X].size())
+				{
+					Delta = 0;
+					Z = 0;
+					while (Z < this->Activations[X + 1].size())
+					{
+						Delta += this->Errors[X + 1][Z] * ActivationFunctionDerivative(this->Activations[X + 1][Z], this->ActivationFunctions[X + 1]) * this->Weights[X + 1][Z][Y];
+
+						Z++;
+					}
+
+					this->Errors[X][Y] = Delta;
+
+					Z = 0;
+					while (Z < this->Weights[X][Y].size())
+					{
+						Delta = this->Errors[X][Y] * ActivationFunctionDerivative(this->Activations[X][Y], this->ActivationFunctions[X]) * this->Activations[max(0, X - 1)][Z];
+
+						if (TrainWeights)
+						{
+							this->Weights[X][Y][Z] -= ((this->LearningRate * Delta) + (this->Momentum * this->PrevWeights[X][Y][Z]));
+							this->PrevWeights[X][Y][Z] = Delta;
+						}
+
+						Z++;
+					}
+
+					Y++;
+				}
+
+				X--;
+			}
+		}
+
+		//ZScore normalization of a vector
+		vector<float> NormalizeDataSet(vector<float> Inputs)
+		{
+			float StdDev = 0;
+			float Mean = 0;
+			int X = 0;
+			vector<float> Outputs = vector<float>();
+
+			while (X < Inputs.size())
+			{
+				Mean += Inputs[X];
+
+				X++;
+			}
+
+			Mean /= Inputs.size();
+			StdDev = StandardDeviation(Inputs);
+
+			X = 0;
+			while (X < Inputs.size())
+			{
+				if (StdDev == 0)
+				{
+					Outputs.push_back(0);
+				}
+				else
+				{
+					Outputs.push_back((Inputs[X] - Mean) / StdDev);
+				}
+
+
+				X++;
+			}
+
+			return Outputs;
+		}
+
+		float StandardDeviation(vector<float> Inputs, float Mean = 0)
+		{
+			float Variance = 0;
+			int X = 0;
+
+			if (Mean == 0)
+			{
+				while (X < Inputs.size())
+				{
+					Mean += Inputs[X];
+
+					X++;
+				}
+
+				Mean /= Inputs.size();
+			}
+
+			X = 0;
+			while (X < Inputs.size())
+			{
+				Variance += pow(Inputs[X] - Mean, 2);
+
+				X++;
+			}
+
+			Variance /= Inputs.size();
+
+			return sqrt(Variance);
+		}
+
+		float ZScore(vector<float> Inputs, float SamplePoint, float Mean = 0)
+		{
+			int X = 0;
+
+			if (Mean == 0)
+			{
+				while (X < Inputs.size())
+				{
+					Mean += Inputs[X];
+
+					X++;
+				}
+
+				Mean /= Inputs.size();
+
+				return (SamplePoint - Mean) / StandardDeviation(Inputs);
+			}
+		}
+
+		float ActivationFunction(float Input, int ActivationID)
+		{
+			float TempVal = 0;
+
+			switch (ActivationID)
+			{
+				//TanH
+				case 0:
+					TempVal = tanh(Input);
+
+					break;
+
+				//Sigmoid - Eular's number is calculated with exp(1.0)
+				case 1:
+					TempVal = 1 / (1 + pow(exp(1.0), -1 * Input));
+
+					break;
+
+				//ReLU
+				case 2:
+					if (Input >= 0)
+					{
+						TempVal = Input;
+					}
+					else
+					{
+						TempVal = this->ReLUConst * Input;
+					}
+
+					break;
+			}
+
+			return TempVal;
+		}
+
+		float ActivationFunctionDerivative(float Input, int ActivationID)
+		{
+			float TempVal = 0;
+
+			switch (ActivationID)
+			{
+				case 0:
+					TempVal = (1 - (tanh(Input) * tanh(Input)));
+					break;
+
+				case 1:
+					TempVal = this->ActivationFunction(Input, ActivationID);
+					TempVal = TempVal * (1 - TempVal);
+
+					break;
+
+				case 2:
+					if (Input >= 0)
+					{
+						TempVal = 1;
+					}
+					else
+					{
+						TempVal = this->ReLUConst;
+					}
+
+					break;
+			}
+
+			return TempVal;
+		}
+
+		//Used for weight and error initialization
+		float RandFloat()
+		{
+			return static_cast <float> (rand() / static_cast <float> (RAND_MAX));
+		}
+};
+
+
+
