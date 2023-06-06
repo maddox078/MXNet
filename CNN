@@ -1,11 +1,13 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Globalization;
 using System.Linq;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Threading.Tasks;
+using System.Windows.Forms.VisualStyles;
 using System.Xml.Serialization;
 
 namespace MaddoxNET
@@ -13,29 +15,237 @@ namespace MaddoxNET
     public class CNN
     {
         public ANN_Perf NeuralNetwork;
-        public int Convolutions = 1;
-        public int ColorChannels = 3;
-        public List<List<List<double>>> Filters = new List<List<List<double>>>();
         public int ImageDimensions = 0;
-        public List<List<List<double>>> ConvolutedFeatures = new List<List<List<double>>>();
-        public List<List<List<double>>> Features = new List<List<List<double>>>();
-        public int InputCount = 0;
-        public int KernelSize = 0;
+        public List<List<List<List<double>>>> Filters = new List<List<List<List<double>>>>();
+        public List<List<List<List<double>>>> FeatureMaps = new List<List<List<List<double>>>>();
+        public List<List<List<List<double>>>> Errors = new List<List<List<List<double>>>>();
         public double ReLUConst = 0.2;
 
-        public CNN(List<int> LayerCounts,List<int> ActivationFunctionIDs,int LossFunctionMethodID, int ImageDim, int ConvolutionCount,int KernelSize, double LearningRate,double MomentumFactor)
+        public CNN(List<int> LayerCounts,List<List<List<List<double>>>> FilterList,List<int> ActivationIDs,int ImageDim, int ConvolutionCount,int KernelSize, double LearningRate,double MomentumFactor)
         {
-            List<double> TempList = new List<double>();
-            List<double> TempList2 = new List<double>();
+            List<int> TempList = new List<int>();
+            List<int> TempList2 = new List<int>();
             List<List<double>> PrimaryFilter = new List<List<double>>();
             int X = 0;
             double TempVal = ImageDim;
 
             this.ImageDimensions = ImageDim;
-            this.Convolutions = ConvolutionCount;
-            this.KernelSize = KernelSize;            
 
-            this.NeuralNetwork = new ANN_Perf(LayerCounts,ActivationFunctionIDs,LossFunctionMethodID, LearningRate,MomentumFactor);
+            this.NeuralNetwork = new ANN_Perf(LayerCounts, ActivationIDs, 0, LearningRate, MomentumFactor);
+
+            this.Filters = FilterList;
+        }
+
+        public void InitializeNetwork(List<int> LayerCounts)
+        {
+            int X = 0;
+            int Y = 0;
+            int Z = 0;
+            int ZZ = 0;
+            Random Rnd = new Random(System.DateTime.Now.Millisecond);
+            List<List<List<double>>> TempList3 = new List<List<List<double>>>();
+            List<List<double>> TempErrors = new List<List<double>>();
+            List<List<double>> TempWeights = new List<List<double>>();
+            List<List<double>> TempFeatures = new List<List<double>>();
+            List<double> TempList = new List<double>();
+            List<List<double>> TempList2 = new List<List<double>>();
+
+            //Filters
+            while(X < LayerCounts.Count)
+            {
+                TempList3 = new List<List<List<double>>>();
+                Y = 0;
+                while(Y < LayerCounts[X])
+                {
+                    TempList2 = new List<List<double>>();
+                    Z = 0;
+
+                    while(Z < 3)
+                    {
+                        TempList = new List<double>();
+                        ZZ = 0;
+                        while(ZZ < 3)
+                        {
+                            TempList.Add(Rnd.NextDouble());
+
+                            ZZ++;
+                        }
+
+                        TempList2.Add(TempList);
+
+                        Z++;
+                    }
+
+                    TempList3.Add(TempList2);
+
+                    Y++;
+                }
+
+                this.Filters.Add(TempList3);
+
+                X++;
+            }
+        }
+
+        public void FeedForward(List<List<double>> Inputs,bool PoolFeatures)
+        {
+            List<List<List<double>>> FinalInputs = new List<List<List<double>>>();
+            List<List<List<double>>> SubInputs = new List<List<List<double>>>();
+            int X = 0;
+            int Y = 0;
+
+            this.FeatureMaps = new List<List<List<List<double>>>>();
+
+            SubInputs.Add(Inputs);
+
+            while(X < this.Filters.Count)
+            {
+                SubInputs = this.Convolve(SubInputs, this.Filters[X], 1);              
+                //SubInputs = this.PoolLayer(SubInputs,2,false);
+                SubInputs = this.ReLUActivations(SubInputs);
+
+                this.FeatureMaps.Add((SubInputs));
+
+                X++;
+            }
+
+            if(PoolFeatures)
+            {
+                this.FeatureMaps[this.FeatureMaps.Count - 1] = this.PoolLayer(this.FeatureMaps[this.FeatureMaps.Count - 1], 2, false);
+            }
+
+            this.NeuralNetwork.ForwardPropagate(this.Flatten3DVector(this.FeatureMaps[this.FeatureMaps.Count - 1]),9);
+         }
+
+        public void BackPropagate(List<List<double>> Inputs,List<double> Outputs,bool PoolFeatures,bool TrainWeights)
+        {
+            int X = this.Filters.Count - 1;
+            int Y = 0;
+            int Z = 0;
+            int ZZ = 0;
+            int A = 0;
+            int B = 0;
+            int C = 0;
+            int D = 0;
+            List<double> LocalActivations = new List<double>();
+            List<double> PreviousActivations = new List<double>();
+            List<double> PreviousErrors = new List<double>();
+            List<double> LocalErrors = new List<double>();
+            List<double> PreviousWeights = new List<double>();
+            List<double> Filters = new List<double>();
+            List<double> TempList = new List<double>();
+            List<List<double>> TempList2 = new List<List<double>>();
+            List<List<List<List<double>>>> Errors = new List<List<List<List<double>>>>();
+            List<List<List<double>>> SubErrors = new List<List<List<double>>>();
+            List<List<double>> SubSubErrors = new List<List<double>>();
+            List<double> SubSubSubErrors = new List<double>();
+            double Delta = 0;
+            double NewDelta = 0;
+
+            this.Errors = new List<List<List<List<double>>>>();
+
+            this.FeedForward(Inputs,PoolFeatures);
+
+            //Normal: 2x45x45
+            this.NeuralNetwork.BackPropagate(this.Flatten3DVector(this.FeatureMaps[this.FeatureMaps.Count - 1]), Outputs, 9, TrainWeights);          
+
+            X = 0;
+            while(X < this.FeatureMaps[this.FeatureMaps.Count - 1].Count)
+            {
+                SubSubErrors = new List<List<double>>();
+                Y = 0;
+                while(Y < this.FeatureMaps[this.FeatureMaps.Count - 1][X].Count)
+                {
+                    SubSubSubErrors = new List<double>();
+                    Z = 0;
+                    while(Z < this.FeatureMaps[this.FeatureMaps.Count - 1][X][Y].Count)
+                    {
+                        Delta = 0;
+                        ZZ = 0;
+
+                        while (ZZ < this.NeuralNetwork.Activations[0].Count)
+                        {
+                            Delta += Math.Pow(this.NeuralNetwork.Errors[0][ZZ] * this.NeuralNetwork.ActivationFunctionDerivative(this.NeuralNetwork.Activations[0][ZZ], this.NeuralNetwork.ActivationFunctions[0]) * this.NeuralNetwork.Weights[0][ZZ][Y],1);
+
+                            ZZ++;
+                        }
+
+                        //Delta *= Delta;
+                        //Delta /= (this.NeuralNetwork.Activations[0].Count);
+                        
+                        SubSubSubErrors.Add(Delta);
+
+                        A = 0;
+
+                        while (A < this.Filters[this.Filters.Count - 1].Count)
+                        {
+                            B = 0;
+                            while (B < this.Filters[this.Filters.Count - 1][A].Count)
+                            {
+                                C = 0;
+                                while(C < this.Filters[this.Filters.Count - 1][A][B].Count)
+                                {
+                                    NewDelta = Delta * this.NeuralNetwork.ActivationFunctionDerivative(this.FeatureMaps[this.FeatureMaps.Count - 1][X][Y][Z], 3) * this.Filters[this.Filters.Count - 1][A][B][C];
+
+                                    if(TrainWeights)
+                                    {
+                                        this.Filters[this.Filters.Count - 1][A][B][C] = this.Filters[this.Filters.Count - 1][A][B][C] - (this.NeuralNetwork.LearningRate * NewDelta);
+                                    }                                    
+
+                                    C++;
+                                }
+
+                                B++;
+                            }
+
+                            A++;
+                        }
+
+                        Z++;
+                    }
+
+
+                    SubSubErrors.Add(SubSubSubErrors);
+
+                    Y++;
+                }
+
+                SubErrors.Add(SubSubErrors);
+
+                X++;
+            }
+
+            //Errors.Add(SubErrors);
+
+            this.Errors.Add(SubErrors);
+        }
+
+        public List<List<List<double>>> AvgValues(List<List<List<double>>> Inputs,int Iterations)
+        {
+            int X = 0;
+            int Y = 0;
+            int Z = 0;
+
+            while(X < Inputs.Count)
+            {
+                Y = 0;
+                while(Y < Inputs[X].Count)
+                {
+                    Z = 0;
+                    while(Z < Inputs[X][Y].Count)
+                    {
+                        Inputs[X][Y][Z] /= Iterations;
+
+                        Z++;
+                    }
+
+                    Y++;
+                }
+
+                X++;
+            }
+
+            return Inputs;
         }
 
         public List<double> GenerateNoiseSample(int Size)
@@ -54,53 +264,46 @@ namespace MaddoxNET
             return RetVal;
         }
 
-
-        public List<double> ProcessInputs(List<List<double>> Input,int KernelSize,bool AvgLayer,List<List<List<double>>> FilterList)
+        public List<List<List<double>>> PoolLayer(List<List<List<double>>> Input,int KernelSize,bool AvgLayer)
         {
-            List<double> ProcessedInput = new List<double>();
-            List<List<double>> PooledConvs = new List<List<double>>();
-            List<List<double>> Convolution = new List<List<double>>();
             int X = 0;
             int Y = 0;
             int Z = 0;
-            int ZZ = 0;
             int A = 0;
             int B = 0;
-            int C = 0;
-            double TempVal = 0;
             double MaxVal = 0;
             double AvgVal = 0;
-            List<List<double>> NewInput = new List<List<double>>();
-            List<List<double>> FinalOutput = new List<List<double>>();
-            List<double> TempList = new List<double>();
-            List<List<double>> TempList2 = new List<List<double>>();
-            List<List<List<double>>> FeatureMaps = new List<List<List<double>>>();
+            List<List<double>> RetVal = new List<List<double>>();
+            List<double> TempVals = new List<double>();
+            List<List<List<double>>> FinalRetVal = new List<List<List<double>>>();
 
-            this.ConvolutedFeatures = new List<List<List<double>>>();
-
-            ZZ = 0;
-            while (ZZ < FilterList.Count)
+            Z = 0;
+            while (Z < Input.Count)
             {
-
-                FinalOutput = new List<List<double>>();
+                RetVal = new List<List<double>>();
                 X = 0;
-                while (X < Input.Count)
+                while (X < Input[Z].Count)
                 {
-                    TempList = new List<double>();
+                    TempVals = new List<double>();
                     Y = 0;
-                    while (Y < Input[X].Count)
+                    while (Y < Input[Z][X].Count)
                     {
-                        //TempList = new List<double>();
-                        TempVal = 0;
+                        AvgVal = 0;
+                        MaxVal = Input[Z][X][Y];
                         A = 0;
-                        while (A < FilterList[ZZ].Count)
+                        while (A < KernelSize)
                         {
                             B = 0;
-                            while (B < FilterList[ZZ].Count)
+                            while (B < KernelSize)
                             {
-                                if (X + A < Input.Count && Y + B < Input[X].Count)
+                                if (A + X < Input[Z][X].Count && B + Y < Input[Z][X].Count)
                                 {
-                                    TempVal += Input[X + A][Y + B] * FilterList[ZZ][A][B];
+                                    AvgVal += Input[Z][X + A][Y + B];
+
+                                    if (Input[Z][X + A][Y + B] > MaxVal)
+                                    {
+                                        MaxVal = Input[Z][X + A][Y + B];
+                                    }
                                 }
 
 
@@ -110,89 +313,213 @@ namespace MaddoxNET
                             A++;
                         }
 
-                        //TempVal /= (A * B);
+                        AvgVal /= (KernelSize * KernelSize);
 
-                        TempList.Add((TempVal));
+                        if (AvgLayer)
+                        {
+                            TempVals.Add(AvgVal);
+                        }
+                        else
+                        {
+                            TempVals.Add(MaxVal);
+                        }
 
-                        Y += 1;
+                        Y += KernelSize;
                     }
 
-                    FinalOutput.Add(TempList);
+                    RetVal.Add(TempVals);
 
-                    X += 1;
+                    X += KernelSize;
                 }
 
-                Input = FinalOutput;
+                FinalRetVal.Add(RetVal);
 
-                ZZ++;
+                Z++;
             }
-            //FinalOutput = new List<List<double>>();
-            PooledConvs = new List<List<double>>();
 
-            X = 0;
-            while (X < FinalOutput.Count)
+            return FinalRetVal;
+        }
+
+        public List<List<List<double>>> ReLUActivations(List<List<List<double>>> Input)
+        {
+            int X = 0;
+            int Y = 0;
+            int Z = 0;
+            List<List<List<double>>> Output = Input;
+
+            while(X < Input.Count)
+            {
+                Y = 0;
+                while( Y < Input[X].Count)
+                {
+                    Z = 0;
+                    while(Z < Input[X][Y].Count)
+                    {
+                        Output[X][Y][Z] = this.ReLU(Input[X][Y][Z], true);
+
+                        Z++;
+                    }
+
+                    Y++;
+
+                }
+
+                X++;
+            }
+
+            return Output;
+        }
+
+        public void BackpropagateError(List<List<List<double>>> Activation,int FilterID)
+        {
+            
+        }
+
+        public List<List<List<double>>> Convolve(List<List<List<double>>> Input, List<List<List<double>>> Input2, int Stride)
+        {
+            int X = 0;
+            int Y = 0;
+            int Z = 0;
+            int ZZ = 0;
+            int A = 0;
+            int B = 0;
+            double TempVal = 0;            
+            List<double> TempList = new List<double>();
+            List<List<double>> TempList2 = new List<List<double>>();
+            List<List<List<double>>> TempList3 = new List<List<List<double>>>();
+
+            //Feature Maps
+            while (X < Input.Count)
+            {
+                //Filters
+                Y = 0;
+                while(Y < Input2.Count)
+                {
+                    //Map Y
+                    TempList2 = new List<List<double>>();
+                    Z = 0;
+                    while(Z < Input[X].Count)
+                    {
+                        //Map X
+                        TempList = new List<double>();
+                        ZZ = 0;
+                        while(ZZ < Input[X][Z].Count)
+                        {
+                            TempVal = 0;
+                            A = 0;
+                            while(A < Input2[Y].Count)
+                            {
+                                B = 0;
+                                while(B < Input2[Y][A].Count)
+                                {
+                                    if(Z + A < Input[X].Count && ZZ + B < Input[X][Z].Count)
+                                    {
+                                        TempVal += (Input[X][Z+A][ZZ+B] * Input2[Y][A][B]);
+                                    }                                    
+
+                                    B++;
+                                }
+
+                                A++;
+                            }
+
+                            //TempVal /= (A * B);
+
+                            TempList.Add(TempVal);
+
+                            ZZ++;
+                        }
+
+                        TempList2.Add(TempList);
+
+
+                        Z++;
+                    }
+
+                    TempList3.Add(TempList2);
+
+                    Y++;
+                }
+
+                X++;
+            }
+
+            return TempList3;
+        }
+
+        public List<List<List<double>>> PoolActivations(List<List<List<double>>> Activations)
+        {
+            List<List<List<double>>> RetVal = new List<List<List<double>>>();
+            List<List<double>> TempList2 = new List<List<double>>();
+            List<double> TempList = new List<double>();
+            int X = 0;
+            int Y = 0;
+            int Z = 0;
+            int A = 0;
+            int B = 0;
+            int C = 0;
+            double MaxVal = 0;
+
+            while(X < Activations[0].Count)
             {
                 TempList = new List<double>();
                 Y = 0;
-                while (Y < FinalOutput[X].Count)
+                while( Y < Activations[0][0].Count)
                 {
-                    MaxVal = FinalOutput[X][Y];
-                    AvgVal = 0;
-                    A = 0;
-                    while (A < KernelSize)
+                    MaxVal = Activations[0][X][Y];
+                    Z = 0;
+                    while(Z < Activations.Count)
                     {
-                        B = 0;
-                        while (B < KernelSize)
+                        if (Activations[Z][X][Y] > MaxVal)
                         {
-                            if (X + A < FinalOutput.Count && Y + B < FinalOutput[X].Count)
-                            {
-                                if (FinalOutput[X + A][Y + B] > MaxVal)
-                                {
-                                    MaxVal = FinalOutput[X + A][Y + B];
-                                    AvgVal += FinalOutput[X + A][Y + B];
-                                }
-                            }
-
-                            B++;
+                            MaxVal = Activations[Z][X][Y];
                         }
 
-                        A++;
+                        Z++;
                     }
 
-                    AvgVal /= (KernelSize * KernelSize);
+                    TempList.Add(MaxVal);
 
-                    if(AvgLayer)
-                    {
-                        TempList.Add(this.ReLU(AvgVal, true));
-                    }
-                    else
-                    {
-                        TempList.Add(this.ReLU(MaxVal, true));
-                    }
-                    
-
-                    Y += KernelSize;
-
+                    Y++;
                 }
 
+                TempList2.Add(TempList);
 
-                PooledConvs.Add(TempList);
-
-
-                X += KernelSize;
+                X++;
             }
 
-            FinalOutput = PooledConvs;
+            RetVal.Add(TempList2);
 
-                
+            return RetVal;
+        }
 
-            TempList = this.Flatten2DVector(FinalOutput);
+        
+        public List<double> ConcatVectors(List<double> Input1,List<double> Input2)
+        {
+            List<double> RetVal = new List<double>();
+            int X = 0;
 
-            return TempList;
+            while(X < Input1.Count)
+            {
+                RetVal.Add(Input1[X]);
+
+                X++;
+            }
+
+            X = 0;
+            while(X < Input2.Count)
+            {
+                RetVal.Add(Input2[X]);
+
+                X++;
+            }
+
+            return RetVal;
         }
 
         public List<double> Flatten3DVector(List<List<List<double>>> Input)
         {
+            //Normal: 2x63x63
             int X = 0;
             int Y = 0;
             int Z = 0;
@@ -270,10 +597,10 @@ namespace MaddoxNET
             return FinalOutput;
         }
 
-        public Bitmap ArrayToBMP(List<double> Input)
+        public Bitmap ArrayToBMP(List<List<double>> Input)
         {
-            int ImageDim = (int)(Math.Round(Math.Sqrt(Input.Count),MidpointRounding.AwayFromZero));
-            Bitmap RetVal = new Bitmap(ImageDim,ImageDim);
+            int ImageDim = (int)(Math.Round(Math.Sqrt(Input.Count), MidpointRounding.AwayFromZero));
+            Bitmap RetVal = new Bitmap(ImageDim, ImageDim);
             int X = 0;
             int Y = 0;
             int RGB = 0;
@@ -283,41 +610,43 @@ namespace MaddoxNET
             int NewX = 0;
             int NewY = 0;
             double TempVal = 0;
-            double MinVal = Input[0];
+            double MinVal = Input[0][0];
 
             X = 0;
             while (X < Input.Count)
             {
                 NewX = X % ImageDim;
                 NewY = (int)(X / ImageDim);
-                RGB = Math.Max(0, Math.Min(255, (int)Math.Abs(Input[X])));
+                RVal = Math.Max(0, Math.Min(255, (int)Math.Abs(Input[X][0])));
+                GVal = Math.Max(0, Math.Min(255, (int)Math.Abs(Input[X][1])));
+                BVal = Math.Max(0, Math.Min(255, (int)Math.Abs(Input[X][2])));
 
-                RGB = 255 - RGB;
+                RGB = 255 - RVal;
 
 
                 if (NewX < RetVal.Width && NewY < RetVal.Height)
                 {
                     //RetVal.SetPixel(NewX, NewY, Color.FromArgb(RGB, RGB, RGB));
 
-                    RetVal.SetPixel(NewX, NewY, Color.FromArgb(RGB,RGB,RGB));
+                    RetVal.SetPixel(NewX, NewY, Color.FromArgb(RGB, RGB, RGB));
                 }
 
 
-                if (Input[X] < MinVal)
+                if (Input[X][0] < MinVal)
                 {
-                    MinVal = Input[X];
+                    MinVal = Input[X][0];
                 }
 
                 X += 1;
             }
 
 
-            Debug.Print(MinVal.ToString());
+            //Debug.Print(MinVal.ToString() + " - " + this.NeuralNetwork.MeanSquaredError.ToString());
 
             return RetVal;
         }
 
-        public List<List<double>> BMPToArray(Bitmap Input)
+        public List<List<double>> BMPToArrayColor(Bitmap Input)
         {
             int X = 0;
             int Y = 0;
@@ -334,8 +663,12 @@ namespace MaddoxNET
                 TempRow = new List<double>();
                 while (Y < Input.Width)
                 {
-                    TempRow.Add(((((Input.GetPixel(Y, X).R + Input.GetPixel(Y, X).G + Input.GetPixel(Y, X).B) / 3) * 0.001) ));
-                    
+                    //TempRow.Add(((((Input.GetPixel(Y, X).R + Input.GetPixel(Y, X).G + Input.GetPixel(Y, X).B) / 3) * 0.001)));
+                    TempRow.Add(Input.GetPixel(Y, X).R * 0.001);
+                    TempRow.Add(Input.GetPixel(Y, X).G * 0.001);
+                    TempRow.Add(Input.GetPixel(Y, X).B * 0.001);
+
+
                     Y++;
                 }
 
@@ -347,6 +680,41 @@ namespace MaddoxNET
             return RetVal;
         }
 
+
+        public List<List<List<double>>> BMPToArray(Bitmap Input)
+        {
+            int X = 0;
+            int Y = 0;
+            int Z = 0;
+            List<double> TempRow = new List<double>();
+            List<List<double>> TempRow2 = new List<List<double>>();
+            List<List<double>> RetVal = new List<List<double>>();
+            List<List<List<double>>> FinalRetVal = new List<List<List<double>>>();
+
+            Input = new Bitmap(Input, this.ImageDimensions, this.ImageDimensions);
+
+            X = 0;
+            TempRow2 = new List<List<double>>();
+            while (X < Input.Height)
+            {
+                Y = 0;
+                TempRow = new List<double>();
+                while (Y < Input.Width)
+                {
+                    TempRow.Add(((((Input.GetPixel(Y, X).R + Input.GetPixel(Y, X).G + Input.GetPixel(Y, X).B) / 3) * 0.001)));
+
+                    Y++;
+                }
+
+                RetVal.Add(TempRow);
+
+                X++;
+            }
+
+            FinalRetVal.Add(RetVal);
+
+            return FinalRetVal;
+        }
 
         public double ReLU(double Input,bool LeakyReLU)
         {
