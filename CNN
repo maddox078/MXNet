@@ -17,11 +17,14 @@ namespace MaddoxNET
         public ANN_Perf NeuralNetwork;
         public int ImageDimensions = 0;
         public List<List<List<List<double>>>> Filters = new List<List<List<List<double>>>>();
+        public List<List<List<List<double>>>> PrevDeltas = new List<List<List<List<double>>>>();
         public List<List<List<List<double>>>> FeatureMaps = new List<List<List<List<double>>>>();
         public List<List<List<List<double>>>> Errors = new List<List<List<List<double>>>>();
         public double ReLUConst = 0.2;
+        public List<int> PoolingSchedule = new List<int>();
+        public List<int> StrideSchedule = new List<int>();
 
-        public CNN(List<int> LayerCounts,List<List<List<List<double>>>> FilterList,List<int> ActivationIDs,int ImageDim, int ConvolutionCount,int KernelSize, double LearningRate,double MomentumFactor)
+        public CNN(List<int> LayerCounts,List<List<List<List<double>>>> FilterList,List<int> ActivationIDs,List<int> PoolingSchedule, List<int> StrideSchedule,int ImageDim, double LearningRate,double MomentumFactor)
         {
             List<int> TempList = new List<int>();
             List<int> TempList2 = new List<int>();
@@ -34,9 +37,13 @@ namespace MaddoxNET
             this.NeuralNetwork = new ANN_Perf(LayerCounts, ActivationIDs, 0, LearningRate, MomentumFactor);
 
             this.Filters = FilterList;
+            
+            this.PoolingSchedule = PoolingSchedule;
+            this.StrideSchedule = StrideSchedule;
+            InitializeNetwork();
         }
 
-        public void InitializeNetwork(List<int> LayerCounts)
+        public void InitializeNetwork()
         {
             int X = 0;
             int Y = 0;
@@ -50,23 +57,26 @@ namespace MaddoxNET
             List<double> TempList = new List<double>();
             List<List<double>> TempList2 = new List<List<double>>();
 
+            this.Errors = new List<List<List<List<double>>>>();
+
             //Filters
-            while(X < LayerCounts.Count)
+            while(X < this.FeatureMaps.Count)
             {
                 TempList3 = new List<List<List<double>>>();
                 Y = 0;
-                while(Y < LayerCounts[X])
+                while(Y < this.FeatureMaps[X].Count)
                 {
                     TempList2 = new List<List<double>>();
                     Z = 0;
 
-                    while(Z < 3)
+                    while(Z < FeatureMaps[X][Y].Count)
                     {
                         TempList = new List<double>();
                         ZZ = 0;
-                        while(ZZ < 3)
+                        while(ZZ < FeatureMaps[X][Y][Z].Count)
                         {
-                            TempList.Add(Rnd.NextDouble());
+                            TempList.Add(0);
+                            //this.PrevDeltas.Add(0);
 
                             ZZ++;
                         }
@@ -81,7 +91,7 @@ namespace MaddoxNET
                     Y++;
                 }
 
-                this.Filters.Add(TempList3);
+                this.Errors.Add(TempList3);
 
                 X++;
             }
@@ -100,33 +110,63 @@ namespace MaddoxNET
 
             while(X < this.Filters.Count)
             {
-                SubInputs = this.Convolve(SubInputs, this.Filters[X], 1);              
-                //SubInputs = this.PoolLayer(SubInputs,2,false);
-                SubInputs = this.ReLUActivations(SubInputs);
+                SubInputs = this.Convolve(SubInputs, this.Filters[X], this.StrideSchedule[X]);              
+                
+                if(PoolFeatures)
+                {
+                    SubInputs = this.PoolLayer(SubInputs, this.PoolingSchedule[X], false);
+                }
+                
+                SubInputs = this.ActivateConvolutions(SubInputs,2);
 
                 this.FeatureMaps.Add((SubInputs));
 
                 X++;
             }
 
-            if(PoolFeatures)
-            {
-                this.FeatureMaps[this.FeatureMaps.Count - 1] = this.PoolLayer(this.FeatureMaps[this.FeatureMaps.Count - 1], 2, false);
-            }
-
             this.NeuralNetwork.ForwardPropagate(this.Flatten3DVector(this.FeatureMaps[this.FeatureMaps.Count - 1]),9);
          }
 
-        public void BackPropagate(List<List<double>> Inputs,List<double> Outputs,bool PoolFeatures,bool TrainWeights)
+        public List<List<double>> ExpandVector(List<double> Input)
+        {
+            List<List<double>> FinalOutput = new List<List<double>>();
+            List<List<double>> Output = new List<List<double>>();
+            List<double> SubOutput = new List<double>();
+            int X = 0;
+            int Y = 0;
+            int Z = 0;
+
+            //This needs to make an x y grid of rgbs
+            while (Z < Input.Count)
+            {
+                X = 0;
+
+                SubOutput.Add(Input[Z]);
+
+                if ((Z + 1) % (int)(Math.Sqrt(Input.Count)) == 0 && Z != 0)
+                {
+                    FinalOutput.Add(SubOutput);
+                    SubOutput = new List<double>();
+                }
+
+                Z++;
+            }
+
+            return FinalOutput;
+        }
+        public void BackPropagate(List<List<double>> Inputs,List<double> Outputs,bool PoolActivations,bool TrainWeights)
         {
             int X = this.Filters.Count - 1;
             int Y = 0;
             int Z = 0;
             int ZZ = 0;
+            int ZZZ = 0;
+            int ZZZZ = 0;
             int A = 0;
             int B = 0;
             int C = 0;
             int D = 0;
+            int E = 0;
             List<double> LocalActivations = new List<double>();
             List<double> PreviousActivations = new List<double>();
             List<double> PreviousErrors = new List<double>();
@@ -142,83 +182,159 @@ namespace MaddoxNET
             double Delta = 0;
             double NewDelta = 0;
 
-            this.Errors = new List<List<List<List<double>>>>();
+            double TempVal1 = 0;
+            double TempVal2 = 0;
+            double TempVal3 = 0;
 
-            this.FeedForward(Inputs,PoolFeatures);
+            //this.Errors = new List<List<List<List<double>>>>();
+
+            this.FeedForward(Inputs,PoolActivations);
+
+            LocalActivations = this.Flatten2DVector(Inputs);
+
+            InitializeNetwork();
 
             //Normal: 2x45x45
-            this.NeuralNetwork.BackPropagate(this.Flatten3DVector(this.FeatureMaps[this.FeatureMaps.Count - 1]), Outputs, 9, TrainWeights);          
+            this.NeuralNetwork.BackPropagate(this.Flatten3DVector(this.FeatureMaps[this.FeatureMaps.Count - 1]), Outputs, 9, TrainWeights);
 
-            X = 0;
-            while(X < this.FeatureMaps[this.FeatureMaps.Count - 1].Count)
+            E = this.Filters.Count - 1;
+
+            while(E >= 0)
             {
-                SubSubErrors = new List<List<double>>();
-                Y = 0;
-                while(Y < this.FeatureMaps[this.FeatureMaps.Count - 1][X].Count)
+                SubErrors = new List<List<List<double>>>();
+                X = 0;
+                while (X < this.FeatureMaps[E].Count)
                 {
-                    SubSubSubErrors = new List<double>();
-                    Z = 0;
-                    while(Z < this.FeatureMaps[this.FeatureMaps.Count - 1][X][Y].Count)
+                    SubSubErrors = new List<List<double>>();
+                    Y = 0;
+                    while (Y < this.FeatureMaps[E][X].Count)
                     {
-                        Delta = 0;
-                        ZZ = 0;
-
-                        while (ZZ < this.NeuralNetwork.Activations[0].Count)
+                        SubSubSubErrors = new List<double>();
+                        Z = 0;
+                        while (Z < this.FeatureMaps[E][X][Y].Count)
                         {
-                            Delta += Math.Pow(this.NeuralNetwork.Errors[0][ZZ] * this.NeuralNetwork.ActivationFunctionDerivative(this.NeuralNetwork.Activations[0][ZZ], this.NeuralNetwork.ActivationFunctions[0]) * this.NeuralNetwork.Weights[0][ZZ][Y],1);
+                            Delta = 0;
+                            ZZ = 0;
 
-                            ZZ++;
-                        }
-
-                        //Delta *= Delta;
-                        //Delta /= (this.NeuralNetwork.Activations[0].Count);
-                        
-                        SubSubSubErrors.Add(Delta);
-
-                        A = 0;
-
-                        while (A < this.Filters[this.Filters.Count - 1].Count)
-                        {
-                            B = 0;
-                            while (B < this.Filters[this.Filters.Count - 1][A].Count)
+                            if(E == this.Filters.Count - 1)
                             {
-                                C = 0;
-                                while(C < this.Filters[this.Filters.Count - 1][A][B].Count)
+                                while (ZZ < this.NeuralNetwork.Activations[0].Count)
                                 {
-                                    NewDelta = Delta * this.NeuralNetwork.ActivationFunctionDerivative(this.FeatureMaps[this.FeatureMaps.Count - 1][X][Y][Z], 3) * this.Filters[this.Filters.Count - 1][A][B][C];
+                                    D = (Y * this.FeatureMaps[this.FeatureMaps.Count - 1][X].Count) + Z;
+                                    Delta += (this.NeuralNetwork.Errors[0][ZZ] * this.NeuralNetwork.ActivationFunctionDerivative(this.NeuralNetwork.Activations[0][ZZ], 3) * this.NeuralNetwork.Weights[0][ZZ][D]);
 
-                                    if(TrainWeights)
-                                    {
-                                        this.Filters[this.Filters.Count - 1][A][B][C] = this.Filters[this.Filters.Count - 1][A][B][C] - (this.NeuralNetwork.LearningRate * NewDelta);
-                                    }                                    
-
-                                    C++;
+                                    ZZ++;
                                 }
 
-                                B++;
+                                Delta /= ZZ;
+                            }
+                            else
+                            {
+                                //Feature Maps
+                                while(ZZ < this.FeatureMaps[E+1].Count)
+                                {
+                                    //Map Y
+                                    ZZZ = 0;
+                                    while(ZZZ < this.FeatureMaps[E + 1][ZZ].Count)
+                                    {
+                                        //Map X
+                                        ZZZZ = 0;
+                                        while(ZZZZ < this.FeatureMaps[E + 1][ZZ][ZZZ].Count)
+                                        {
+                                            A = (int)(ZZ / this.FeatureMaps[E+1].Count);
+                                            B = (int)(ZZZ / this.FeatureMaps[E + 1][ZZ].Count);
+                                            C = (int)(ZZZZ / this.FeatureMaps[E + 1][ZZ][ZZZ].Count);
+                                            TempVal1 = this.Errors[(E+1)][ZZ][ZZZ][ZZZZ];
+                                            TempVal2 = this.NeuralNetwork.ActivationFunctionDerivative(this.FeatureMaps[E + 1][ZZ][ZZZ][ZZZZ], 3);
+                                            TempVal3 = this.Filters[E + 1][A][B][C];
+
+                                            Delta += (TempVal1 * TempVal2 * TempVal3);
+
+                                            ZZZZ++;
+                                        }
+
+                                        ZZZ++;
+                                    }
+
+                                    ZZ++;
+                                }
+
+                                Delta /= (ZZZZ * ZZZ * ZZ);
                             }
 
-                            A++;
+
+                            //Delta *= Delta;
+
+                            this.Errors[E][X][Y][Z] = Delta;
+
+                            SubSubSubErrors.Add(Delta);
+
+                            A = 0;
+
+                            while (A < this.Filters[E].Count)
+                            {
+                                B = 0;
+                                while (B < this.Filters[E][A].Count)
+                                {
+                                    C = 0;
+                                    while (C < this.Filters[E][A][B].Count)
+                                    {
+                                        if(E == 0)
+                                        {
+                                            D = (A * (this.Filters[E][A].Count * this.Filters[E][A][B].Count)) + (B * this.Filters[E][A].Count) + C;
+                                            TempVal2 = LocalActivations[D];
+                                            TempVal1 = this.NeuralNetwork.ActivationFunctionDerivative(this.FeatureMaps[E][X][Y][Z], 3);
+
+                                            NewDelta = Delta * TempVal1 * TempVal2;
+                                        }
+                                        else
+                                        {
+                                            ZZ = (int)((int)(X / this.FeatureMaps[E].Count) / this.Filters[E - 1].Count) ;
+                                            ZZZ = (int)((int)(Y / this.FeatureMaps[E][ZZ].Count) / this.Filters[E - 1][ZZ].Count);
+                                            ZZZZ = (int)((int)(Z / this.FeatureMaps[E][ZZ][ZZZ].Count) / this.Filters[E - 1][ZZ][ZZZ].Count );
+                                            NewDelta = Delta * this.NeuralNetwork.ActivationFunctionDerivative(this.FeatureMaps[E][X][Y][Z], 3) * this.FeatureMaps[E - 1][ZZ][ZZZ][ZZZZ];
+                                        }
+                                        
+
+                                        if (TrainWeights)
+                                        {
+                                            this.Filters[E][A][B][C] = this.Filters[E][A][B][C] - ((this.NeuralNetwork.LearningRate * NewDelta));
+                                        }
+
+                                        //this.PrevDeltas[0][A][B][C] = NewDelta;
+
+                                        C++;
+                                    }
+
+                                    B++;
+                                }
+
+                                A++;
+                            }
+
+                            Z++;
                         }
 
-                        Z++;
+
+                        SubSubErrors.Add(SubSubSubErrors);
+
+                        Y++;
                     }
 
+                    SubErrors.Add(SubSubErrors);
 
-                    SubSubErrors.Add(SubSubSubErrors);
-
-                    Y++;
+                    X++;
                 }
 
-                SubErrors.Add(SubSubErrors);
+                //this.Errors.Add(SubErrors);
 
-                X++;
+                E--;
             }
 
-            //Errors.Add(SubErrors);
+            
 
-            this.Errors.Add(SubErrors);
         }
+
 
         public List<List<List<double>>> AvgValues(List<List<List<double>>> Inputs,int Iterations)
         {
@@ -324,12 +440,12 @@ namespace MaddoxNET
                             TempVals.Add(MaxVal);
                         }
 
-                        Y += KernelSize;
+                        Y+=KernelSize;
                     }
 
                     RetVal.Add(TempVals);
 
-                    X += KernelSize;
+                    X+=KernelSize;
                 }
 
                 FinalRetVal.Add(RetVal);
@@ -340,7 +456,7 @@ namespace MaddoxNET
             return FinalRetVal;
         }
 
-        public List<List<List<double>>> ReLUActivations(List<List<List<double>>> Input)
+        public List<List<List<double>>> ActivateConvolutions(List<List<List<double>>> Input,int ActivationID)
         {
             int X = 0;
             int Y = 0;
@@ -355,7 +471,21 @@ namespace MaddoxNET
                     Z = 0;
                     while(Z < Input[X][Y].Count)
                     {
-                        Output[X][Y][Z] = this.ReLU(Input[X][Y][Z], true);
+                        switch(ActivationID)
+                        {
+                            case 0:
+                                Output[X][Y][Z] = Math.Tanh(Input[X][Y][Z]);
+                                break;
+
+                            case 1:
+                                Output[X][Y][Z] = this.Sigmoid(Input[X][Y][Z]);
+                                break;
+
+                            case 2:
+                                Output[X][Y][Z] = this.ReLU(Input[X][Y][Z], true);
+                                break;
+                        }
+                        
 
                         Z++;
                     }
@@ -392,6 +522,7 @@ namespace MaddoxNET
             while (X < Input.Count)
             {
                 //Filters
+                //TempList3 = new List<List<List<double>>>();
                 Y = 0;
                 while(Y < Input2.Count)
                 {
@@ -427,13 +558,13 @@ namespace MaddoxNET
 
                             TempList.Add(TempVal);
 
-                            ZZ++;
+                            ZZ+=Stride;
                         }
 
                         TempList2.Add(TempList);
 
 
-                        Z++;
+                        Z+=Stride;
                     }
 
                     TempList3.Add(TempList2);
@@ -569,34 +700,6 @@ namespace MaddoxNET
             return Output;
         }
 
-        public List<List<double>> ExpandVector(List<double> Input)
-        {
-            List<List<double>> FinalOutput = new List<List<double>>();
-            List<List<double>> Output = new List<List<double>>();
-            List<double> SubOutput = new List<double>();
-            int X = 0;
-            int Y = 0;
-            int Z = 0;
-
-            //This needs to make an x y grid of rgbs
-            while (Z < Input.Count)
-            {
-                X = 0;
-
-                SubOutput.Add(Input[Z]);
-
-                if ((Z + 1) % (int)(Math.Sqrt(Input.Count)) == 0 && Z != 0)
-                {
-                    FinalOutput.Add(SubOutput);
-                    SubOutput = new List<double>();
-                }
-
-                Z++;
-            }
-
-            return FinalOutput;
-        }
-
         public Bitmap ArrayToBMP(List<List<double>> Input)
         {
             int ImageDim = (int)(Math.Round(Math.Sqrt(Input.Count), MidpointRounding.AwayFromZero));
@@ -654,6 +757,8 @@ namespace MaddoxNET
             List<double> TempRow = new List<double>();
             List<List<double>> TempRow2 = new List<List<double>>();
             List<List<double>> RetVal = new List<List<double>>();
+
+            Input = new Bitmap(Input, this.ImageDimensions, this.ImageDimensions);
 
             X = 0;
             TempRow2 = new List<List<double>>();
