@@ -43,6 +43,29 @@ namespace MaddoxNET
             InitializeNetwork();
         }
 
+        public void NormalizeFilters(int NormalizationMethodID)
+        {
+            int X = 0;
+            int Y = 0;
+            List<double> TempList = new List<double>();
+
+            while(X < this.Filters.Count)
+            {
+                Y = 0;
+                while(Y < this.Filters[X].Count)
+                {
+                    TempList = this.Flatten2DVector(this.Filters[X][Y]);
+                    TempList = this.NeuralNetwork.NormalizeDataSet(TempList, NormalizationMethodID);
+
+                    this.Filters[X][Y] = this.ExpandVector(TempList);
+
+                    Y++;
+                }
+
+                X++;
+            }
+        }
+
         public void InitializeNetwork()
         {
             int X = 0;
@@ -58,6 +81,7 @@ namespace MaddoxNET
             List<List<double>> TempList2 = new List<List<double>>();
 
             this.Errors = new List<List<List<List<double>>>>();
+            this.PrevDeltas = new List<List<List<List<double>>>>();
 
             //Filters
             while(X < this.FeatureMaps.Count)
@@ -92,6 +116,7 @@ namespace MaddoxNET
                 }
 
                 this.Errors.Add(TempList3);
+                this.PrevDeltas.Add(TempList3);
 
                 X++;
             }
@@ -199,7 +224,7 @@ namespace MaddoxNET
 
             E = this.Filters.Count - 1;
 
-            while(E >= 0)
+            while(E > 0)
             {
                 SubErrors = new List<List<List<double>>>();
                 X = 0;
@@ -241,12 +266,17 @@ namespace MaddoxNET
                                         ZZZZ = 0;
                                         while(ZZZZ < this.FeatureMaps[E + 1][ZZ][ZZZ].Count)
                                         {
-                                            A = (int)(ZZ / this.FeatureMaps[E+1].Count);
-                                            B = (int)(ZZZ / this.FeatureMaps[E + 1][ZZ].Count);
-                                            C = (int)(ZZZZ / this.FeatureMaps[E + 1][ZZ][ZZZ].Count);
+                                            A = (int)(ZZ / ((int)(this.FeatureMaps[E].Count / this.Filters[E].Count) * this.Filters[E+1].Count));
+                                            B = (int)(Y / (this.FeatureMaps[E+1][ZZ].Count * this.PoolingSchedule[E]));
+                                            C = (int)(Z / (this.FeatureMaps[E+1][ZZ][ZZZ].Count * this.PoolingSchedule[E]));
+                                            
+
+                                            //A = (int)(ZZ / this.FeatureMaps[E + 1].Count);
+                                            //B = (int)(ZZZ / this.FeatureMaps[E + 1][A].Count);
+                                            //C = (int)(ZZZZ / this.FeatureMaps[E + 1][A][B].Count);
                                             TempVal1 = this.Errors[(E+1)][ZZ][ZZZ][ZZZZ];
                                             TempVal2 = this.NeuralNetwork.ActivationFunctionDerivative(this.FeatureMaps[E + 1][ZZ][ZZZ][ZZZZ], 3);
-                                            TempVal3 = this.Filters[E + 1][A][B][C];
+                                            TempVal3 = this.Filters[E][A][B][C];
 
                                             Delta += (TempVal1 * TempVal2 * TempVal3);
 
@@ -289,19 +319,21 @@ namespace MaddoxNET
                                         }
                                         else
                                         {
-                                            ZZ = (int)((int)(X / this.FeatureMaps[E].Count) / this.Filters[E - 1].Count) ;
-                                            ZZZ = (int)((int)(Y / this.FeatureMaps[E][ZZ].Count) / this.Filters[E - 1][ZZ].Count);
-                                            ZZZZ = (int)((int)(Z / this.FeatureMaps[E][ZZ][ZZZ].Count) / this.Filters[E - 1][ZZ][ZZZ].Count );
+                                            ZZ = (int)(X / this.Filters[E].Count) ;
+                                            ZZZ = (int)(Y * this.PoolingSchedule[E]);
+                                            ZZZZ = (int)(Z * this.PoolingSchedule[E]);
+
                                             NewDelta = Delta * this.NeuralNetwork.ActivationFunctionDerivative(this.FeatureMaps[E][X][Y][Z], 3) * this.FeatureMaps[E - 1][ZZ][ZZZ][ZZZZ];
                                         }
                                         
 
                                         if (TrainWeights)
                                         {
-                                            this.Filters[E][A][B][C] = this.Filters[E][A][B][C] - ((this.NeuralNetwork.LearningRate * NewDelta));
+                                            this.Filters[E][A][B][C] = this.Filters[E][A][B][C] - ((this.NeuralNetwork.LearningRate * NewDelta) + (this.NeuralNetwork.Momentum * this.PrevDeltas[E][A][B][C]));
                                         }
 
-                                        //this.PrevDeltas[0][A][B][C] = NewDelta;
+                                        //this.PrevDeltas[E][A][B][C] = NewDelta;
+                                        this.PrevDeltas[E][A][B][C] = 0;
 
                                         C++;
                                     }
@@ -513,66 +545,95 @@ namespace MaddoxNET
             int ZZ = 0;
             int A = 0;
             int B = 0;
+            int C = 0;
+            int D = 0;
             double TempVal = 0;            
             List<double> TempList = new List<double>();
             List<List<double>> TempList2 = new List<List<double>>();
             List<List<List<double>>> TempList3 = new List<List<List<double>>>();
 
-            //Feature Maps
-            while (X < Input.Count)
-            {
-                //Filters
-                //TempList3 = new List<List<List<double>>>();
-                Y = 0;
-                while(Y < Input2.Count)
+            C = 0;
+            while (C < 3)
+            {                
+                //Feature Maps
+                while (X < Input.Count)
                 {
-                    //Map Y
-                    TempList2 = new List<List<double>>();
-                    Z = 0;
-                    while(Z < Input[X].Count)
+                    //Filters
+                    Y = 0;
+                    while (Y < Input2.Count)
                     {
-                        //Map X
-                        TempList = new List<double>();
-                        ZZ = 0;
-                        while(ZZ < Input[X][Z].Count)
+                        //Map Y
+                        TempList2 = new List<List<double>>();
+                        Z = 0;
+                        while (Z < Input[X].Count)
                         {
-                            TempVal = 0;
-                            A = 0;
-                            while(A < Input2[Y].Count)
+                            //Map X
+                            TempList = new List<double>();
+                            ZZ = 0;
+                            while (ZZ < Input[X][Z].Count)
                             {
-                                B = 0;
-                                while(B < Input2[Y][A].Count)
+                                TempVal = 0;
+                                A = 0;
+                                while (A < Input2[Y].Count)
                                 {
-                                    if(Z + A < Input[X].Count && ZZ + B < Input[X][Z].Count)
+                                    B = 0;
+                                    while (B < Input2[Y][A].Count)
                                     {
-                                        TempVal += (Input[X][Z+A][ZZ+B] * Input2[Y][A][B]);
-                                    }                                    
+                                        if (Z + A < Input[X].Count && ZZ + B < Input[X][Z].Count)
+                                        {
+                                            if(C == 0)
+                                            {
+                                                TempVal += (Input[X][Z + A][ZZ + B] * Input2[Y][A][B]);
+                                            }
+                                            else
+                                            {
+                                                TempVal += (TempList3[X][Z + A][ZZ + B] * Input2[Y][A][B]);
+                                            }
+                                            
+                                        }
 
-                                    B++;
+                                        B++;
+                                    }
+
+                                    A++;
                                 }
 
-                                A++;
+                                //TempVal /= (A * B);
+
+                                TempList.Add(TempVal);
+
+                                ZZ += Stride;
                             }
 
-                            //TempVal /= (A * B);
+                            TempList2.Add(TempList);
 
-                            TempList.Add(TempVal);
 
-                            ZZ+=Stride;
+                            Z += Stride;
                         }
 
-                        TempList2.Add(TempList);
+                        if (C == 0)
+                        {
+                            TempList3.Add(this.ExpandVector(this.NeuralNetwork.NormalizeDataSet(this.Flatten2DVector(TempList2), 4)));
+                        }
+                        else
+                        {
+                            D = 0;
+                            while(D < TempList3.Count)
+                            {
+                                TempList3[D] = this.ExpandVector(this.NeuralNetwork.NormalizeDataSet(this.Flatten2DVector(TempList3[D]), 4));
 
+                                D++;
+                            }
+                        }
+                        
 
-                        Z+=Stride;
+                        Y++;
                     }
 
-                    TempList3.Add(TempList2);
-
-                    Y++;
+                    X++;
                 }
 
-                X++;
+                C++;
             }
 
             return TempList3;
