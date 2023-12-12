@@ -42,9 +42,9 @@ namespace MaddoxNET
         public double FilterVariance = 0;
         public double FilterMean = 0;
         public int GlobalIterator = 0;
-        public int CNNActivationFunctionID = 2;
+        public List<int> CNNActivationFunctionIDs = new List<int>();
 
-        public CNN(List<int> LayerCounts,List<List<List<List<double>>>> FilterList,List<int> ActivationIDs,List<int> PoolingSchedule, List<int> StrideSchedule,int ImageDim, double LearningRate,double MomentumFactor,int WeightInitializationID=0)
+        public CNN(List<int> LayerCounts,List<List<List<List<double>>>> FilterList,List<int> ActivationIDs, List<int> CNNActivationIDs,List<int> PoolingSchedule, List<int> StrideSchedule,int ImageDim, double LearningRate,double MomentumFactor,int WeightInitializationID=0)
         {
             List<int> TempList = new List<int>();
             List<int> TempList2 = new List<int>();
@@ -57,7 +57,8 @@ namespace MaddoxNET
             this.NeuralNetwork = new ANN_Perf(LayerCounts, ActivationIDs, 2, LearningRate, MomentumFactor,WeightInitializationID);
 
             this.Filters = FilterList;
-            
+
+            this.CNNActivationFunctionIDs = CNNActivationIDs;
             this.PoolingSchedule = PoolingSchedule;
             this.StrideSchedule = StrideSchedule;
             InitializeNetwork();
@@ -419,7 +420,6 @@ namespace MaddoxNET
             int Y = 0;
             int Z = 0;
             int ZZ = 0;
-            int ConvFunctionID = CNNActivationFunctionID;
 
             this.FeatureMaps = new List<List<List<List<double>>>>();
             this.RawFeatureMaps = new List<List<List<List<double>>>>();
@@ -443,7 +443,7 @@ namespace MaddoxNET
 
                 SubInputs = this.Convolve(SubInputs, this.Filters[X], this.StrideSchedule[X], false);
 
-                this.DerivativeFeatureMaps.Add(this.ActivateDerivativeConvolutions(SubInputs, ConvFunctionID));
+                this.DerivativeFeatureMaps.Add(this.ActivateDerivativeConvolutions(SubInputs, this.CNNActivationFunctionIDs[X]));
 
                 //this.PrePoolFeatureMaps.Add(SubInputs);
 
@@ -451,7 +451,7 @@ namespace MaddoxNET
 
                 if (X >= 0)
                 {
-                    SubInputs = this.ActivateConvolutions(this.RawFeatureMaps[X], ConvFunctionID);
+                    SubInputs = this.ActivateConvolutions(this.RawFeatureMaps[X], this.CNNActivationFunctionIDs[X]);
                 }
 
                 if (PoolFeatures)
@@ -525,24 +525,11 @@ namespace MaddoxNET
             int Y = 0;
             int Z = 0;
             int ZZ = 0;
-            int ConvFunctionID =CNNActivationFunctionID;
 
             this.FeatureMaps = new List<List<List<List<double>>>>();
             this.RawFeatureMaps = new List<List<List<List<double>>>>();
             this.DerivativeFeatureMaps = new List<List<List<List<double>>>>();
             this.PrePoolFeatureMaps = new List<List<List<List<double>>>>();
-
-            //if (this.MaxFeatureMaps.Count == 0)
-            //{
-            //    X = 0;
-            //    while (X < this.Filters.Count)
-            //    {
-            //        FinalInputs = new List<List<List<List<double>>>>();
-            //        this.MaxFeatureMaps.Add(FinalInputs);
-
-            //        X++;
-            //    }
-            //}
 
             SubInputs.Add(Inputs);
 
@@ -560,7 +547,7 @@ namespace MaddoxNET
 
                 SubInputs = this.Convolve(SubInputs, this.Filters[X], this.StrideSchedule[X],false);
 
-                this.DerivativeFeatureMaps.Add(this.ActivateDerivativeConvolutions(SubInputs, ConvFunctionID));
+                this.DerivativeFeatureMaps.Add(this.ActivateDerivativeConvolutions(SubInputs, this.CNNActivationFunctionIDs[X]));
                 //this.PrePoolFeatureMaps.Add(SubInputs);
 
                 if(PoolFeatures)
@@ -574,7 +561,7 @@ namespace MaddoxNET
 
                 if(X >= 0)
                 {
-                    SubInputs = this.ActivateConvolutions(this.RawFeatureMaps[X], ConvFunctionID);
+                    SubInputs = this.ActivateConvolutions(this.RawFeatureMaps[X], this.CNNActivationFunctionIDs[X]);
                 }
                 
                 this.FeatureMaps.Add(SubInputs);
@@ -980,7 +967,7 @@ namespace MaddoxNET
             return Output;
         }
 
-        public List<List<List<double>>> CalculateGeneratorLoss(double DiscriminatorActivation)
+        public List<List<List<double>>> CalculateGeneratorLoss(double DiscriminatorActivation,double DiscriminatorRawOutput)
         {
             List<List<List<double>>> Outputs = new List<List<List<double>>>();
             List<List<double>> TempList2 = new List<List<double>>();
@@ -1000,10 +987,12 @@ namespace MaddoxNET
                     Y = 0;
                     while (Y < this.FeatureMaps[this.FeatureMaps.Count - 1][Z][X].Count)
                     {
-                        TempVal = DiscriminatorActivation - 1.0f;
-                        //TempVal = -(1.0f / DiscriminatorActivation);
+                        //TempVal = DiscriminatorActivation - 1.0f;
+                        TempVal = -(1.0f / DiscriminatorActivation);
+                        TempVal *= this.NeuralNetwork.ActivationFunctionDerivative(DiscriminatorRawOutput, 1);
                         TempVal *= DerivativeFeatureMaps[this.DerivativeFeatureMaps.Count - 1][Z][X][Y];
                         
+
                         TempList1.Add(TempVal);
 
                         Y++;
@@ -1094,7 +1083,7 @@ namespace MaddoxNET
 
 
 
-                    NeuronGradients = CalculateGeneratorLoss(DiscriminatorActivation);
+                    NeuronGradients = CalculateGeneratorLoss(DiscriminatorActivation,DiscriminatorRawActivation);
 
                     //NeuronGradients = ResolveAveragePooling(SubFilters, E);
                     //NeuronGradients = SubFilters;
@@ -1118,7 +1107,7 @@ namespace MaddoxNET
                         NeuronGradients = this.ElementWiseMultiply(NeuronGradients, this.DerivativeFeatureMaps[E]);
                         FilterGradients = this.Convolve(ReshapeTensor(this.NeuralNetwork.Activations[this.NeuralNetwork.Activations.Count - 1], this.Filters[0].Count), NeuronGradients, 1, false);
 
-                        NeuronGradients = this.DeConvolve(NeuronGradients, this.Filters[E], 1, this.Filters[E][0].Count - 1);
+                        NeuronGradients = this.PadLayerMaps(NeuronGradients, this.Filters[0][0].Count - 1);
 
                     }
                     else
@@ -1190,10 +1179,25 @@ namespace MaddoxNET
             }
 
             //NeuronGradients = this.PoolMaps(this.Errors[0]);
-            this.NeuralNetwork.BackPropagate((Inputs), this.Flatten3DVector(this.Errors[0]), OutputNormalization, TrainWeights, WeightOptimizerID, ErrorOnly, NormalizeOutputLayer, DiscriminatorActivation, DiscriminatorRawActivation);
+            this.NeuralNetwork.BackPropagate((Inputs), this.Flatten3DVector((this.Errors[0])), OutputNormalization, TrainWeights, WeightOptimizerID, ErrorOnly, NormalizeOutputLayer, DiscriminatorActivation, DiscriminatorRawActivation);
 
 
             this.GlobalIterator++;
+        }
+
+        public List<List<List<double>>> CreateEmptyLayerMaps(int MapDimensions, int MapCount, double InitVal)
+        {
+            int X = 0;
+            List<List<List<double>>> Outputs = new List<List<List<double>>>();
+
+            while(X < MapCount)
+            {
+                Outputs.Add(CreateEmptyMap(MapDimensions,InitVal));
+
+                X++;
+            }
+
+            return Outputs;
         }
 
         public List<List<List<double>>> ResolveAveragePooling(List<List<List<double>>> InputLayer,int LayerID)
@@ -3180,7 +3184,7 @@ namespace MaddoxNET
             return TempList3;
         }
 
-        List<List<double>> CreateEmptyMap(int Dimensions)
+        List<List<double>> CreateEmptyMap(int Dimensions,double InitializationVal = 0)
         {
             List<double> SubOutput = new List<double>();
             List<List<double>> Output = new List<List<double>>();
@@ -3193,7 +3197,7 @@ namespace MaddoxNET
                 Y = 0;
                 while(Y < Dimensions)
                 {
-                    SubOutput.Add(0);
+                    SubOutput.Add(InitializationVal);
 
                     Y++;
                 }
