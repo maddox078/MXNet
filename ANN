@@ -1,3 +1,4 @@
+using Microsoft.VisualBasic.ApplicationServices;
 using Microsoft.VisualBasic.Logging;
 using System;
 using System.Collections.Generic;
@@ -11,19 +12,19 @@ namespace MaddoxNET
 {
     public class ANN_Perf
     {
-        public List<List<List<double>>> Weights = new List<List<List<double>>>();
-        public List<List<List<double>>> WeightDeltas = new List<List<List<double>>>();
-        public List<List<List<double>>> PrevWeights = new List<List<List<double>>>();
-        public List<List<List<double>>> PrevWeightsM = new List<List<List<double>>>();
-        public List<List<List<double>>> PrevWeightsV = new List<List<List<double>>>();
-        public List<List<double>> Activations = new List<List<double>>();
-        public List<List<double>> NetInputs = new List<List<double>>();
-        public List<List<double>> Errors = new List<List<double>>();
-        public List<int> ActivationFunctions = new List<int>();
-        public List<List<double>> BatchNormPopStats = new List<List<double>>();
+        public double[][][] Weights = new double [0][][];
+        public double [][][] WeightDeltas = new double[0][][];
+        public double [][][] PrevWeights = new double [0][][];
+        public double [][][] PrevWeightsM = new double[0][][];
+        public double [][][] PrevWeightsV = new double [0][][];
+        public double [][] Activations = new double[0][];
+        public double [][] NetInputs = new double[0][];
+        public double [][] Errors = new double[0][];
+        public int [] ActivationFunctions = new int[0];
+        public double [][] BatchNormPopStats = new double[0][];
         public double LearningRate = 0;
         public double Momentum = 0;
-        public double ReLUConst = 0.2;
+        public double ReLUConst = 0.01;
         public double RMSPropConst = 0.9;
         public double MeanSquaredError = 0;
         public double B1 = 0.5;
@@ -31,92 +32,117 @@ namespace MaddoxNET
         public double WeightClipFactor = 0.0001;
         public List<double> NormalizationConsts = new List<double>();
 
-        public ANN_Perf(List<int> LayerCounts,List<int> ActivationFunctions,int LossFunction,double LearningRate,double MomentumFactor,int WeightInitializationID = 0)
+
+        public ANN_Perf(int [] LayerCounts,int [] ActivationFunctions,int LossFunction,double LearningRate,double MomentumFactor,int WeightInitializationID = 0)
         {
             int X = 0;
             int Y = 0;
             int Z = 0;
-            List<double> LayerActivations = new List<double>();
-            List<double> LayerNetInputs = new List<double>();
-            List<double> LayerError = new List<double>();
-            List<List<double>> LayerWeights = new List<List<double>>();
-            List<double> NeuronWeights = new List<double>();
-            List<List<double>> PrevLayerWeightsM = new List<List<double>>();
-            List<List<double>> PrevLayerWeightsV = new List<List<double>>();
-            List<List<double>> PrevLayerWeights = new List<List<double>>();
-            List<double> PrevNeuronWeightsM = new List<double>();
-            List<double> PrevNeuronWeightsV = new List<double>();
-            List<double> PrevNeuronWeights = new List<double>();
+            double [] LayerActivations;
+            double[] LayerNetInputs;
+            double[] LayerError;
+            double [][] LayerWeights;
+            double [] NeuronWeights;
+            double [][] PrevLayerWeightsM;
+            double [][] PrevLayerWeightsV;
+            double [][] PrevLayerWeights;
+            double [] PrevNeuronWeightsM;
+            double [] PrevNeuronWeightsV;
+            double [] PrevNeuronWeights;
             Random Rnd = new Random(System.Guid.NewGuid().GetHashCode());
+            double U1 = Rnd.NextDouble();
+            double U2 = Rnd.NextDouble();
+            double Z1 = Math.Sqrt(-2.0f * Math.Log(U1)) * Math.Cos(2.0f * Math.PI * U2);
+            double Z2 = Math.Sqrt(-2.0f * Math.Log(U1)) * Math.Sin(2.0f * Math.PI * U2);
+            double StdDev = 0.005;
+            double TempVal = 0;
+
+
+            this.Weights = new double[LayerCounts.Length][][];
+            this.WeightDeltas = new double[LayerCounts.Length][][]; 
+            this.PrevWeights = new double[LayerCounts.Length][][];
+            this.PrevWeightsM = new double[LayerCounts.Length][][];
+            this.PrevWeightsV = new double[LayerCounts.Length][][];
+            this.Activations = new double[LayerCounts.Length][];
+            this.NetInputs = new double[LayerCounts.Length][];
+            this.Errors = new double[LayerCounts.Length][];
 
             this.ActivationFunctions = ActivationFunctions;
             this.LearningRate = LearningRate;
             this.Momentum = MomentumFactor;
 
             //Layer
-            while(X < LayerCounts.Count)
+            while(X < LayerCounts.Length)
             {
                 //Neuron
-                PrevLayerWeightsM = new List<List<double>>();
-                PrevLayerWeightsV = new List<List<double>>();
-                PrevLayerWeights = new List<List<double>>();
-                LayerWeights = new List<List<double>>();
-                LayerActivations = new List<double>();
-                LayerNetInputs = new List<double>();
-                LayerError = new List<double>();
+                PrevLayerWeightsM = new double[LayerCounts[X]][];
+                PrevLayerWeightsV = new double[LayerCounts[X]][];
+                PrevLayerWeights = new double[LayerCounts[X]][];
+                LayerWeights = new double[LayerCounts[X]][];
+                LayerActivations = new double[LayerCounts[X]];
+                LayerNetInputs = new double[LayerCounts[X]];
+                LayerError = new double[LayerCounts[X]];
                 Rnd = new Random(System.Guid.NewGuid().GetHashCode());
                 Y = 0;
                 while(Y < LayerCounts[X])
                 {
-                    LayerActivations.Add(Rnd.NextDouble());
-                    LayerNetInputs.Add(0);
-                    LayerError.Add(0);
+                    LayerActivations[Y] = Rnd.NextDouble();
+                    LayerNetInputs[Y] = 0;
+                    LayerError[Y] = 0;
 
-                    NeuronWeights = new List<double>();
-                    PrevNeuronWeightsM = new List<double>();
-                    PrevNeuronWeightsV = new List<double>();
-                    PrevNeuronWeights = new List<double>();
+                    NeuronWeights = new double[LayerCounts[Math.Max(0, X - 1)]];
+                    PrevNeuronWeightsM = new double[LayerCounts[Math.Max(0, X - 1)]];
+                    PrevNeuronWeightsV = new double[LayerCounts[Math.Max(0, X - 1)]];
+                    PrevNeuronWeights = new double[LayerCounts[Math.Max(0, X - 1)]];
 
                     //Dendrite
                     Z = 0;
                     while(Z < LayerCounts[Math.Max(0,X-1)])
                     {
+                        U1 = Rnd.NextDouble();
+                        U2 = Rnd.NextDouble();
+                        Z1 = Math.Sqrt(-2.0f * Math.Log(U1)) * Math.Cos(2.0f * Math.PI * U2);
 
-                        //if(Rnd.Next() % 2 == 0)
-                       // {
-                        //    NeuronWeights.Add(-1 * Rnd.NextDouble() % 0.001);
-                        //}
-                        //else
-                        //{
-                            NeuronWeights.Add(1 * Rnd.NextDouble() % 0.1);
-                        //}
-                        
+                        if (Rnd.Next() % 3 == 0)
+                        {
+                            TempVal =  (Rnd.NextDouble() * (0.009 - 0.001) + 0.001) * -1;
+                        }
+                        else
+                        {
+                            TempVal = Rnd.NextDouble() * (0.009 - 0.001) + 0.001;
+                        }
 
-                        PrevNeuronWeightsM.Add(0);
-                        PrevNeuronWeightsV.Add(0);
-                        PrevNeuronWeights.Add(0);
+
+                        NeuronWeights[Z] = TempVal;
+
+
+
+
+                        PrevNeuronWeightsM[Z] = 0;
+                        PrevNeuronWeightsV[Z] = 0;
+                        PrevNeuronWeights[Z] =0;
 
                         Z++;
                     }
 
 
 
-                    LayerWeights.Add(NeuronWeights);
-                    PrevLayerWeightsM.Add(PrevNeuronWeightsM);
-                    PrevLayerWeightsV.Add(PrevNeuronWeightsV);
-                    PrevLayerWeights.Add(PrevNeuronWeights);
+                    LayerWeights[Y] = NeuronWeights;
+                    PrevLayerWeightsM[Y] = PrevNeuronWeightsM;
+                    PrevLayerWeightsV[Y] = PrevNeuronWeightsV;
+                    PrevLayerWeights[Y] = PrevNeuronWeights;
 
                     Y++;
                 }
 
-                this.Activations.Add(LayerActivations);
-                this.NetInputs.Add(LayerNetInputs);
-                this.Errors.Add(LayerError);
-                this.PrevWeightsV.Add(PrevLayerWeightsV);
-                this.PrevWeightsM.Add(PrevLayerWeightsM);
-                this.Weights.Add((LayerWeights));
-                this.WeightDeltas.Add(PrevLayerWeights);
-                this.PrevWeights.Add(PrevLayerWeights);
+                this.Activations[X] = LayerActivations;
+                this.NetInputs[X] = LayerNetInputs;
+                this.Errors[X] = LayerError;
+                this.PrevWeightsV[X] = PrevLayerWeightsV;
+                this.PrevWeightsM[X] = PrevLayerWeightsM;
+                this.Weights[X] = LayerWeights;
+                this.WeightDeltas[X] = PrevLayerWeights;
+                this.PrevWeights[X] = PrevLayerWeights;
 
                 X++;
             }
@@ -147,19 +173,22 @@ namespace MaddoxNET
             int Z = 0;
             double Upper = 0;
             double Lower = 0;
+            double Variance = 0;
             Random Rnd = new Random(System.Guid.NewGuid().GetHashCode());
 
-            while (X < this.Weights.Count)
+            while (X < this.Weights.Length)
             {
-                Upper = (this.Activations[X].Count + this.Activations[Math.Max(0, X - 1)].Count);
-                Lower = -1 * Upper;
+                Upper = this.Activations[X].Length;
+                Lower = this.Activations[Math.Max(0, X - 1)].Length;
+                
                 Y = 0;
-                while(Y < this.Weights[X].Count)
+                while(Y < this.Weights[X].Length)
                 {
                     Z = 0;
-                    while (Z < this.Weights[X][Y].Count)
+                    while (Z < this.Weights[X][Y].Length)
                     {
-                        this.Weights[X][Y][Z] = Rnd.NextDouble() * (2.0f/(Upper));
+                        Variance = 2.0f / (Upper+Lower);
+                        this.Weights[X][Y][Z] = Rnd.Next((int)(Math.Min(Upper,Lower)),(int)(Math.Max(Lower,Upper))) *  Math.Sqrt(Variance);
 
                         Z++;
                     }
@@ -171,11 +200,20 @@ namespace MaddoxNET
             }
         }
 
-        public double RandDoubleInRange(double Lower,double Upper)
+        public double RandDoubleInRange(double Lower, double Upper)
         {
             Random Rnd = new Random(System.Guid.NewGuid().GetHashCode());
-            
-            return Rnd.NextDouble() * (Upper - Lower) + Lower;
+
+            if (Rnd.Next() % 2 == 0)
+            {
+                return (Rnd.NextDouble() * (Upper - Lower) + Lower) * -1;
+            }
+            else
+            {
+                return Rnd.NextDouble() * (Upper - Lower) + Lower;
+            }
+
+
         }
 
         public void HeInitialize()
@@ -188,17 +226,17 @@ namespace MaddoxNET
             int InputCount = 0;
             int OutputCount = 0;
 
-            while(X < this.Weights.Count)
+            while(X < this.Weights.Length)
             {
-                StdDev = Math.Sqrt(2.0f / this.Activations[Math.Max(X-1, 0)].Count);
-                InputCount = this.Activations[Math.Max(X - 1, 0)].Count;
-                OutputCount = this.Activations[X].Count;
+                StdDev = Math.Sqrt(2.0f / this.Activations[Math.Max(X-1, 0)].Length);
+                InputCount = this.Activations[Math.Max(X - 1, 0)].Length;
+                OutputCount = this.Activations[X].Length;
 
                 Y = 0;
-                while(Y < this.Weights[X].Count)
+                while(Y < this.Weights[X].Length)
                 {
                     Z = 0;
-                    while(Z < this.Weights[X][Y].Count)
+                    while(Z < this.Weights[X][Y].Length)
                     {
                         this.Weights[X][Y][Z] = Rnd.Next(Math.Min(InputCount,OutputCount),Math.Max(InputCount,OutputCount)) * StdDev;
 
@@ -259,9 +297,9 @@ namespace MaddoxNET
             int X = 0;
             double RetVal = 0;
 
-            while(X < this.Errors[this.Errors.Count - 1].Count)
+            while(X < this.Errors[this.Errors.Length - 1].Length)
             {
-                RetVal += this.Errors[this.Errors.Count - 1][X];
+                RetVal += this.Errors[this.Errors.Length - 1][X];
                 
                 X++;
             }
@@ -275,10 +313,10 @@ namespace MaddoxNET
             int Y = 0;
             int Z = 0;
 
-            while(X < this.Activations.Count)
+            while(X < this.Activations.Length)
             {
                 Y = 0;
-                while(Y < this.Activations[X].Count)
+                while(Y < this.Activations[X].Length)
                 {
                     this.Activations[X][Y] = this.Activations[X][Y] * this.BatchNormPopStats[X][1] + this.BatchNormPopStats[X][0];
 
@@ -289,24 +327,96 @@ namespace MaddoxNET
             }
         }
 
-        public void ForwardPropagate(List<double> Inputs,int OutputNormalizationMethod,bool NormalizeOutputLayer = true)
+        public List<double> ResolveJacobian(List<List<double>> InputDerivative,List<double> LossVector)
+        {
+            List<double> RetVal = new List<double>();
+            int X = 0;
+            int Y = 0;
+
+            while(X < InputDerivative.Count)
+            {
+                RetVal.Add(0);
+
+                X++;
+            }
+
+            X = 0;
+            while(X < LossVector.Count)
+            {
+                Y = 0;
+                while(Y < LossVector.Count)
+                {
+                    RetVal[X] += (LossVector[Y] * InputDerivative[Y][X]);
+
+                    Y++;
+                }
+
+                X++;
+            }
+
+
+            return RetVal;
+        }
+
+
+        public List<List<double>> SoftmaxDerivative(List<double> SoftmaxInputs)
+        {
+            List<double> SubRetVal = new List<double>();
+            List<List<double>> RetVal = new List<List<double>>();
+            int X = 0;
+            int Y = 0;
+
+            while(X < SoftmaxInputs.Count)
+            {
+                SubRetVal = new List<double>();
+                Y = 0;
+                while(Y < SoftmaxInputs.Count)
+                {
+                    if(X == Y)
+                    {
+                        SubRetVal.Add(SoftmaxInputs[X] * (1.0f - SoftmaxInputs[X]));
+                    }
+                    else
+                    {
+                        SubRetVal.Add(-SoftmaxInputs[X] * SoftmaxInputs[Y]);
+                    }
+                    
+
+                    Y++;
+                }
+
+                RetVal.Add(SubRetVal);
+
+                X++;
+            }
+
+            return RetVal;
+        }
+
+        public void ForwardPropagate(double[] Inputs,int OutputNormalizationMethod,bool NormalizeOutputLayer = true)
         {
             int X = 0;
             int Y = 0;
             int Z = 0;
             double NetSignal = 0;
-            List<double> TempList = new List<double>();
+            double[] TempList = new double[0];
+            int Limit = 0;
 
-            while(X < this.Activations[0].Count)
+            Limit = Math.Abs(Inputs.Length - this.Activations[0].Length);
+
+            X = 0;
+            while(X < Limit)
             {
-                if (this.Activations[0].Count != Inputs.Count)
-                {
-                    this.NetInputs[0][X] = 0;
-                }
-                else
-                {
+                Debug.Print("MISMATCH");
+
+                X++;
+            }
+
+            X = 0;
+            while(X < this.Activations[0].Length)
+            {
                     this.NetInputs[0][X] = Inputs[X];
-                }
+
 
                 //this.Activations[0][X] = this.ActivationFunction(Inputs[X], this.ActivationFunctions[0]);
                 //this.Activations[0][X] = Inputs[X];
@@ -317,7 +427,7 @@ namespace MaddoxNET
             //this.NetInputs[0] = this.NormalizeDataSet(this.NetInputs[0], 3);
 
             X = 0;
-            while(X < this.Activations[0].Count)
+            while(X < this.Activations[0].Length)
             {
                 this.Activations[0][X] = this.ActivationFunction(this.NetInputs[0][X], this.ActivationFunctions[0]);
 
@@ -332,15 +442,15 @@ namespace MaddoxNET
             //this.Activations[0] = this.NormalizeDataSet(this.Activations[0], 3);
 
             X = 1;
-            while(X < this.Activations.Count)
+            while(X < this.Activations.Length)
             {
                 Y = 0;
-                while(Y < this.Activations[X].Count)
+                while(Y < this.Activations[X].Length)
                 {
                     TempList = this.Activations[X - 1];
                     NetSignal = 0;
                     Z = 0;
-                    while(Z < TempList.Count)
+                    while(Z < TempList.Length)
                     {
                         NetSignal += (this.Weights[X][Y][Z] * TempList[Z]);
 
@@ -372,7 +482,7 @@ namespace MaddoxNET
                 //}
 
                 Y = 0;
-                while(Y < this.Activations[X].Count)
+                while(Y < this.Activations[X].Length)
                 {
                     this.Activations[X][Y] = this.ActivationFunction(this.NetInputs[X][Y], this.ActivationFunctions[X]);
 
@@ -401,7 +511,7 @@ namespace MaddoxNET
 
             if(OutputNormalizationMethod != 9)
             {
-                this.Activations[this.Activations.Count - 1] = this.NormalizeDataSet(this.Activations[this.Activations.Count - 1], OutputNormalizationMethod);
+                //this.Activations[this.Activations.Length - 1] = this.NormalizeDataSet(this.Activations[this.Activations.Length - 1], OutputNormalizationMethod);
                 //this.NetInputs[this.Activations.Count - 1] = this.NormalizeDataSet(this.NetInputs[this.Activations.Count - 1], OutputNormalizationMethod);
             }
             
@@ -414,7 +524,7 @@ namespace MaddoxNET
             int ActivationIndex = 0;
             double MaxActivation = this.Activations[1][0];
 
-            while (X < this.Activations[this.Activations.Count - 1].Count)
+            while (X < this.Activations[this.Activations.Length - 1].Length)
             {
                 if ((this.Activations[1][X]) > (MaxActivation))
                 {
@@ -481,7 +591,7 @@ namespace MaddoxNET
             //}
         }
 
-        public void BackPropagate(List<double> Inputs, List<double> Outputs, int OutputNormalizationMethod, bool TrainWeights, int OptimizerID, bool OnlyError = false, bool NormalizeOutputLayer = true, double AdditionalVal = 0, double AdditionalVal2 = 0)
+        public void BackPropagate(double[] Inputs,double[] Outputs, int OutputNormalizationMethod, bool TrainWeights, int OptimizerID, bool OnlyError = false, bool NormalizeOutputLayer = true, double AdditionalVal = 0, double AdditionalVal2 = 0)
         {
             int X = 0;
             int Y = 0;
@@ -497,121 +607,143 @@ namespace MaddoxNET
             double SGDDelta = 0;
             //List<List<List<double>>> NewWeights = this.Weights;
             //List<List<List<double>>> NewPrevWeights = this.PrevWeights;
-            List<double> TransposedActivations = new List<double>();
+            double[] TransposedActivations;
+            double[] SoftmaxDerivatives;
 
-            if(OnlyError == false)
-            {
-                this.ForwardPropagate(Inputs, OutputNormalizationMethod, NormalizeOutputLayer);
-            }
+            this.ForwardPropagate(Inputs, OutputNormalizationMethod, NormalizeOutputLayer);
+
             
+
+
             //this.PrevWeights.Clear();
             //this.WeightDeltas = this.Weights;
 
             ////////////////////////////
 
             X = 0;
-            while (X < this.Activations[this.Activations.Count - 1].Count)
+            while (X < this.Activations[this.Activations.Length - 1].Length)
             {
                 if (OnlyError == false)
                 {
-                    //BCE
-                    //this.Errors[this.Errors.Count - 1][X] = -(Outputs[X] / this.Activations[this.Activations.Count - 1][X]) + ((1 - Outputs[X]) / (1 / this.Activations[this.Activations.Count - 1][X]));
-
-                    //L2 = this.ActivationFunctionDerivative(this.NetInputs[this.Activations.Count - 1][X], this.ActivationFunctions[this.Activations.Count - 1]);
-                    //this.Errors[this.Errors.Count - 1][X] *= L2;
-
-                    //CCE
-                    //L2 = this.ActivationFunctionDerivative(this.NetInputs[this.Activations.Count - 1][X], this.ActivationFunctions[this.Activations.Count - 1]);
-                    //this.Errors[this.Errors.Count - 1][X] = -(Outputs[X] / this.Activations[this.Activations.Count - 1][X]) * L2;
+                    //L2 = (this.Activations[this.Activations.Count - 1][X] - Outputs[X]);
+                    if (Outputs[X] == 0)
+                    {
+                        //L2 = (1.0f / (1.0f - this.Activations[this.Activations.Count - 1][X]));
+                        L2 = (this.Activations[this.Activations.Length - 1][X] - Outputs[X]);
 
 
-                    if (double.IsNaN(this.Errors[this.Errors.Count - 1][X]))
+                        if (OutputNormalizationMethod != 2)
+                        {
+                            L2 *= this.ActivationFunctionDerivative(this.NetInputs[this.Activations.Length - 1][X], this.ActivationFunctions[this.Activations.Length - 1]);
+                        }
+                    }
+                    else
+                    {
+                        //L2 = -1.0f / this.Activations[this.Activations.Count - 1][X];                        
+                        L2 = (this.Activations[this.Activations.Length - 1][X] - 1.0f);
+
+                        if (OutputNormalizationMethod != 2)
+                        {
+                            L2 *= this.ActivationFunctionDerivative(this.NetInputs[this.Activations.Length - 1][X], this.ActivationFunctions[this.Activations.Length - 1]);
+                        }
+                        //L2 = (this.Activations[this.Activations.Count - 1][X]);
+                    }
+
+
+
+
+                    this.Errors[this.Errors.Length - 1][X] = L2;
+                }
+                else
+                {
+                    if(X < Outputs.Length)
+                    {
+                        L2 = Outputs[X];
+                    }
+                    else
+                    {
+                        L2 = 1;
+                    }
+                    
+
+                    
+                    //L2 *= this.ActivationFunctionDerivative(AdditionalVal2, 1);
+                    L2 *= this.ActivationFunctionDerivative(this.NetInputs[this.Activations.Length - 1][X], this.ActivationFunctions[this.ActivationFunctions.Length - 1]);
+
+
+                    //this.Errors[this.Errors.Count - 1][X] = -(1.0f / (AdditionalVal)) * L2;
+                    this.Errors[this.Errors.Length - 1][X] = L2;
+                }
+
+                if(OutputNormalizationMethod == 2)
+                {
+                    //SoftmaxDerivatives = ResolveJacobian(SoftmaxDerivative(this.Activations[this.Activations.Length - 1]), this.Errors[this.Errors.Length - 1]);                    
+                }
+
+                Y = 0;
+                while (Y < this.Weights[this.Weights.Length - 1][X].Length)
+                {
+                    //Delta = this.Errors[this.Errors.Count - 1][X] * this.Activations[this.Activations.Count - 2][Y];
+                    Delta = this.Errors[this.Errors.Length - 1][X] * this.Activations[this.Activations.Length - 2][Y];
+                    if(double.IsNaN(Delta))
                     {
                         break;
                     }
 
-                    ////MSE
-                    //L2 = this.ActivationFunctionDerivative(this.NetInputs[this.Activations.Count - 1][X], this.ActivationFunctions[this.Activations.Count - 1]);
-                    this.Errors[this.Errors.Count - 1][X] = 2 * (this.Activations[this.Activations.Count - 1][X] - Outputs[X]);
-                    
-                    //Log Loss
-                    //L2 = this.ActivationFunctionDerivative(this.NetInputs[this.Activations.Count - 1][X], this.ActivationFunctions[this.Activations.Count - 1]);
-                    //this.Errors[this.Errors.Count - 1][X] = L2 * (-Outputs[X] * (1.0f / this.Activations[this.Activations.Count - 1][X]) + (1 - Outputs[X]) * (1.0f / (1 - this.Activations[this.Activations.Count - 1][X])));
+                    if(OutputNormalizationMethod == 2)
+                    {
+                        //Delta *= SoftmaxDerivatives[X];
+                    }
 
-                    //if (Outputs[X] == 1)
-                    //{
-                    //    this.Errors[this.Errors.Count - 1][X] = (this.Activations[this.Activations.Count - 1][X] - 1) * this.ActivationFunctionDerivative(this.NetInputs[this.NetInputs.Count - 1][X], this.NetInputs.Count - 1);
-                    //}
-                    //else
-                    //{
-                    //    this.Errors[this.Errors.Count - 1][X] = ((this.Activations[this.Activations.Count - 1][X])) * this.ActivationFunctionDerivative(this.NetInputs[this.NetInputs.Count - 1][X], this.NetInputs.Count - 1);
-                    //}
-
-
-                    //this.Errors[this.Errors.Count - 1][X] *= L2;
-
-                    ////LSGAN
-
-
-                    //Wasserstein
-                    //L2 = this.ActivationFunctionDerivative(this.NetInputs[this.Activations.Count - 1][X], this.ActivationFunctions[this.Activations.Count - 1]);
-                    //this.Errors[this.Errors.Count - 1][X] = -(this.Activations[this.Activations.Count - 1][0] + this.Activations[this.Activations.Count - 1][0])
-                }
-                else
-                {
-                    //L2 = this.ActivationFunctionDerivative(this.NetInputs[this.NetInputs.Count - 1][X], this.ActivationFunctions[this.NetInputs.Count - 1]);
-                    L2 = Outputs[X];
-                    //L2 *= Inputs[X];
-                    //this.Errors[this.Errors.Count - 1][X] = -(1.0f / (AdditionalVal)) * L2;
-                    this.Errors[this.Errors.Count - 1][X] = (AdditionalVal - 1) * L2;
-                }
-
-                Y = 0;
-                while (Y < this.Weights[this.Weights.Count - 1][X].Count)
-                {
-                    Delta = this.Errors[this.Errors.Count - 1][X]  * this.Activations[this.Activations.Count - 2][Y];
-
-                    switch(OptimizerID)
+                    switch (OptimizerID)
                     {
                         case 0:
-                            SGDDelta = this.LearningRate * Delta;
+                            //this.PrevWeights[this.Errors.Count - 1][X][Y] += Delta;
                             //this.Weights[this.Weights.Count - 1][X][Y] = this.Weights[this.Weights.Count - 1][X][Y] - (SGDDelta + (0 * this.PrevWeights[this.Errors.Count - 1][X][Y]));
                             break;
 
                         case 1:
-                            TempVal = (this.RMSPropConst * this.PrevWeights[this.PrevWeights.Count - 1][X][Y]) + ((Math.Pow(Delta, 2) * (1 - this.RMSPropConst)));
+                            TempVal = (this.RMSPropConst * this.PrevWeights[this.PrevWeights.Length - 1][X][Y]) + ((Math.Pow(Delta, 2) * (1 - this.RMSPropConst)));
                             
                             if(TempVal < 0)
                             {
                                 break;
                             }
                             
-                            this.PrevWeights[this.PrevWeights.Count - 1][X][Y] = TempVal;
-                            RMSPropDelta = this.LearningRate / Math.Sqrt(TempVal + 0.00000000000000001) * Delta;
-                            
-                            if(double.IsNaN(RMSPropDelta))
-                            {
-                                break;
-                            }
-                            
+                            this.PrevWeights[this.PrevWeights.Length - 1][X][Y] = TempVal;
+                            RMSPropDelta = this.LearningRate / Math.Sqrt(TempVal + 0.000000000000000000001) * Delta;
+                            Delta = RMSPropDelta;
+
                             //this.Weights[this.Weights.Count - 1][X][Y] = this.Weights[this.Weights.Count - 1][X][Y] - RMSPropDelta;
                             break;
 
                         case 2:
-                            this.PrevWeightsM[this.Errors.Count - 1][X][Y] = (this.B1 * this.PrevWeightsM[this.Errors.Count - 1][X][Y] + (1 - this.B1) * Delta);
-                            this.PrevWeightsV[this.Errors.Count - 1][X][Y] = (this.B2 * this.PrevWeightsV[this.Errors.Count - 1][X][Y] + (1 - this.B2) * Math.Pow(Delta, 2));
-                            ADAMDelta = (this.PrevWeightsM[this.Errors.Count - 1][X][Y] / (1 - this.B1)) / Math.Sqrt((this.PrevWeightsV[this.Errors.Count - 1][X][Y] / (1-this.B2)) + 0.00000000000000001);
+                            this.PrevWeightsM[this.Errors.Length - 1][X][Y] = (this.B1 * this.PrevWeightsM[this.Errors.Length - 1][X][Y] + (1.0f - this.B1) * Delta);
+                            this.PrevWeightsV[this.Errors.Length - 1][X][Y] = (this.B2 * this.PrevWeightsV[this.Errors.Length - 1][X][Y] + (1.0f - this.B2) * Math.Pow(Delta, 2));
+
+
+                            if((this.B2 * this.PrevWeightsV[this.Errors.Length - 1][X][Y] + (1.0f - this.B2) * Math.Pow(Delta, 2)) < 0)
+                            {
+                                break;
+                            }
+
+                            ADAMDelta = (this.PrevWeightsM[this.Errors.Length - 1][X][Y] / (1.0f - this.B1)) / Math.Sqrt(((this.PrevWeightsV[this.Errors.Length - 1][X][Y] + 0.000000000000000000001) / (1.0f-this.B2)));
                             //this.Weights[this.Weights.Count - 1][X][Y] = this.Weights[this.Weights.Count - 1][X][Y] - this.LearningRate * ADAMDelta;
+                            Delta = ADAMDelta;
                             break;
                     }
 
-                    if(Math.Abs(this.Weights[this.Weights.Count - 1][X][Y]) > this.WeightClipFactor)
+                    if(double.IsNaN(Delta))
                     {
-                        //this.Weights[this.Weights.Count - 1][X][Y] = Math.Sign(this.Weights[this.Weights.Count - 1][X][Y]) * WeightClipFactor;
+                        break;
                     }
 
-                    this.WeightDeltas[this.Errors.Count - 1][X][Y] += ADAMDelta;
-                    this.PrevWeights[this.PrevWeights.Count - 1][X][Y] += Delta;
+                    if(TrainWeights)
+                    {
+                        this.WeightDeltas[this.Errors.Length - 1][X][Y] += Delta;
+                        this.PrevWeights[this.PrevWeights.Length - 1][X][Y] += Delta;
+                    }
+                    
 
                     Y++;
                 }
@@ -625,17 +757,17 @@ namespace MaddoxNET
             }
             
 
-            X = this.Activations.Count - 2;
+            X = this.Activations.Length - 2;
 
             while (X >= 0)
             {
                 Y = 0;
-                while (Y < this.Activations[X].Count)
+                while (Y < this.Activations[X].Length)
                 {
                     Delta = 0;
                     Z = 0;
 
-                    while (Z < this.Activations[X + 1].Count)
+                    while (Z < this.Activations[X + 1].Length)
                     {
                         Delta += (this.Errors[X + 1][Z] * this.Weights[X + 1][Z][Y]);
 
@@ -657,15 +789,16 @@ namespace MaddoxNET
                 //this.Errors[X] = this.NormalizeDataSet(this.Errors[X], 4);
 
                 Y = 0;
-                while (Y < this.Activations[X].Count)
+                while (Y < this.Activations[X].Length)
                 {
 
                     if (X > 0)
                     {
                         Z = 0;
-                        while (Z < this.Weights[X][Y].Count)
+                        while (Z < this.Weights[X][Y].Length)
                         {
                             Delta = this.Errors[X][Y] * this.Activations[(X - 1)][Z];
+                            //Delta = this.Errors[X][Y];
 
                             if (TrainWeights)
                             {                                
@@ -673,29 +806,34 @@ namespace MaddoxNET
                                 switch(OptimizerID)
                                 {
                                     case 0:
-                                        SGDDelta = this.LearningRate * Delta;
-                                        //this.Weights[X][Y][Z] = this.Weights[X][Y][Z] - (SGDDelta + 0 * this.PrevWeights[X][Y][Z]);
+                                        
+                                        //this.PrevWeights[X][Y][Z] += Delta;
                                         break;
 
                                     case 1:
                                         TempVal = (this.RMSPropConst * this.PrevWeights[X][Y][Z]) + (Math.Pow(Delta, 2) * (1 - this.RMSPropConst)); ;
                                         this.PrevWeights[X][Y][Z] = TempVal;
-                                        RMSPropDelta = this.LearningRate / Math.Sqrt(TempVal + 0.00000000000000001) * Delta;
-                                        this.Weights[X][Y][Z] = this.Weights[X][Y][Z] - RMSPropDelta;
+                                        RMSPropDelta = this.LearningRate / Math.Sqrt(TempVal + 0.000000000000000000001) * Delta;
+                                        Delta = RMSPropDelta;
                                         break;
 
                                     case 2:
-                                        this.PrevWeightsM[X][Y][Z] = (this.B1 * this.PrevWeightsM[X][Y][Z] + (1 - this.B1) * Delta);
-                                        this.PrevWeightsV[X][Y][Z] = (this.B2 * this.PrevWeightsV[X][Y][Z] + (1 - this.B2) * Math.Pow(Delta, 2));
-                                        ADAMDelta = (this.PrevWeightsM[X][Y][Z] / (1 - this.B1)) / Math.Sqrt((this.PrevWeightsV[X][Y][Z] / (1 - this.B2)) + 0.00000000000000001);
+                                        this.PrevWeightsM[X][Y][Z] = (this.B1 * this.PrevWeightsM[X][Y][Z] + (1.0f - this.B1) * Delta);
+                                        this.PrevWeightsV[X][Y][Z] = (this.B2 * this.PrevWeightsV[X][Y][Z] + (1.0f - this.B2) * Math.Pow(Delta, 2));
+                                        ADAMDelta = (this.PrevWeightsM[X][Y][Z] / (1.0f - this.B1)) / Math.Sqrt(((this.PrevWeightsV[X][Y][Z] + 0.000000000000000000001) / (1.0f - this.B2)));
                                         //this.Weights[X][Y][Z] = this.Weights[X][Y][Z] - this.LearningRate * ADAMDelta;
+                                        Delta = ADAMDelta;
                                         break;
                                 }
 
                             }
 
-                            this.WeightDeltas[X][Y][Z] += ADAMDelta;
-                            this.PrevWeights[X][Y][Z] += Delta;
+                            if(TrainWeights)
+                            {
+                                this.WeightDeltas[X][Y][Z] += Delta;
+                                this.PrevWeights[X][Y][Z] += Delta;
+                            }
+
 
                             Z++;
                         }
@@ -718,15 +856,20 @@ namespace MaddoxNET
             int Y = 0;
             int Z = 0;
 
-            while(X < this.Weights.Count)
+            while(X < this.Weights.Length)
             {
                 Y = 0;
-                while(Y < this.Weights[X].Count)
+                while(Y < this.Weights[X].Length)
                 {
                     Z = 0;
-                    while(Z < this.Weights[X][Y].Count)
+                    while(Z < this.Weights[X][Y].Length)
                     {
-                        this.Weights[X][Y][Z] -= ((this.WeightDeltas[X][Y][Z] / BatchSize) * this.LearningRate + (this.PrevWeights[X][Y][Z] * this.Momentum));
+                        this.Weights[X][Y][Z] -= ((this.WeightDeltas[X][Y][Z] / BatchSize) * this.LearningRate);
+
+                        if(double.IsNaN(this.Weights[X][Y][Z]))
+                        {
+                            break;
+                        }
                         this.WeightDeltas[X][Y][Z] = 0;
 
                         Z++;
@@ -738,40 +881,18 @@ namespace MaddoxNET
                 X++;
             }
 
+            //ResetStoredAdamValues();
+
         }
 
-        public double GetMaxWeight(int LayerID)
-        {
-            int X = 0;
-            int Y = 0;
-            double MaxVal = this.Weights[LayerID][X][Y];
 
-            while(X < this.Weights[LayerID].Count)
-            {
-                Y = 0;
-                while(Y < this.Weights[LayerID][X].Count)
-                {
-                    if (Math.Abs(this.Weights[LayerID][X][Y]) > Math.Abs(MaxVal))
-                    {
-                        MaxVal = this.Weights[LayerID][X][Y];
-                    }
-
-                    Y++;
-                }
-
-                X++;
-            }
-
-            return MaxVal;
-        }
-
-        public List<List<double>> SoftmaxDataSet(List<List<double>> Inputs)
+        public double[][] SoftmaxDataSet(double[][] Inputs)
         {
             int X = 0;
             int Y = 0;
             int Z = 0;
             double TempVal = 0;
-            List<List<double>> RetVal = new List<List<double>>();
+            double[][] RetVal;
             List<double> TempList = new List<double>();
 
             //while(X < Inputs.Count)
@@ -789,18 +910,18 @@ namespace MaddoxNET
             //}
 
             X = 0;
-            while (X < Inputs.Count)
+            while (X < Inputs.Length)
             {
                 TempList = new List<double>();
                 Y = 0;
-                while (Y < Inputs[X].Count)
+                while (Y < Inputs[X].Length)
                 {
                     TempList.Add((Math.Exp(Inputs[X][Y]) / TempVal) + 0.040);
 
                     Y++;
                 }
 
-                RetVal.Add(TempList);
+                //RetVal.Add(TempList);
 
                 X++;
             }
@@ -856,16 +977,16 @@ namespace MaddoxNET
             return Math.Sqrt(Variance);
         }
 
-        public double MatrixMultiply(List<double> List1, List<double> List2)
+        public double MatrixMultiply(double[] List1, double[] List2)
         {
             int X = 0;
             int Y = 0;
             double RetVal = 0;
 
-            while(X < List1.Count)
+            while(X < List1.Length)
             {
                 Y = 0;
-                while(Y < List2.Count)
+                while(Y < List2.Length)
                 {
                     RetVal += (List1[X] * List2[Y]);
 
@@ -911,10 +1032,10 @@ namespace MaddoxNET
 
             //Get Mean
             X = 0;
-            while (X < this.Weights[LayerID].Count)
+            while (X < this.Weights[LayerID].Length)
             {
                 Y = 0;
-                while (Y < this.Weights[LayerID][X].Count)
+                while (Y < this.Weights[LayerID][X].Length)
                 {
                     if (Math.Abs(this.Weights[LayerID][X][Y]) > Math.Abs(MaxVal))
                     {
@@ -933,10 +1054,10 @@ namespace MaddoxNET
             //Get Std Dev
             ItemNumber = 0;
             X = 0;
-            while (X < this.Weights[LayerID].Count)
+            while (X < this.Weights[LayerID].Length)
             {
                 Y = 0;
-                while (Y < this.Weights[LayerID][X].Count)
+                while (Y < this.Weights[LayerID][X].Length)
                 {
                     Variance += Math.Pow(this.Weights[LayerID][X][Y] - Mean, 2);
                     ItemNumber++;
@@ -953,10 +1074,10 @@ namespace MaddoxNET
             //Apply Z Score
             ItemNumber = 0;
             X = 0;
-            while (X < this.Weights[LayerID].Count)
+            while (X < this.Weights[LayerID].Length)
             {
                 Y = 0;
-                while (Y < this.Weights[LayerID][X].Count)
+                while (Y < this.Weights[LayerID][X].Length)
                 {
                     this.Weights[LayerID][X][Y] = (this.Weights[LayerID][X][Y] / MaxVal);
                     ItemNumber++;
@@ -1057,124 +1178,6 @@ namespace MaddoxNET
             Variance /= Inputs.GetUpperBound(0);
 
             return Math.Sqrt(Variance);
-        }
-
-
-        public double[] NormalizeArray(double[] Inputs, int NormalizationMethodID)
-        {
-            int X = 0;
-            int Y = 0;
-            double TempVal = 0;
-            List<double> TempList = new List<double>();
-            int MinibatchSize = 25;
-            double StdDev = 0;
-            List<double> Outputs = new List<double>();
-            double MinVal = 0;
-            double MaxVal = 0;
-            double Mean = 0;
-
-            switch (NormalizationMethodID)
-            {
-                //TanH
-                case 0:
-                    while (X < Inputs.GetUpperBound(0))
-                    {
-                        Inputs[X] = Math.Tanh(Inputs[X]);
-
-                        X++;
-                    }
-
-                    break;
-                //Sigmoid
-                case 1:
-                    while (X < Inputs.GetUpperBound(0))
-                    {
-                        TempVal = Math.Exp(Inputs[X]);
-                        Inputs[X] = TempVal / (TempVal + 1);
-
-                        X++;
-                    }
-
-                    break;
-                //Softmax
-                case 2:
-                    while (X < Inputs.GetUpperBound(0))
-                    {
-                        TempVal += Math.Exp(Inputs[X]);
-
-                        X++;
-                    }
-
-                    X = 0;
-
-                    while (X < Inputs.GetUpperBound(0))
-                    {
-                        Inputs[X] = Math.Exp(Inputs[X]) / TempVal;
-
-                        X++;
-                    }
-
-                    break;
-                //Raw Average
-                case 3:
-                    while (X < Inputs.GetUpperBound(0))
-                    {
-                        TempVal += Inputs[X];
-
-                        X++;
-                    }
-
-                    X = 0;
-
-                    while (X < Inputs.GetUpperBound(0))
-                    {
-                        Inputs[X] = Inputs[X] / TempVal;
-
-                        X++;
-                    }
-
-                    break;
-                //Z-Score
-                case 4:
-                    X = 0;
-                    Mean = 0;
-                    TempList = new List<double>();
-                    while (X < Inputs.GetUpperBound(0))
-                    {
-                        if (Y + X >= Inputs.GetUpperBound(0))
-                        {
-                            break;
-                        }
-                        //TempList.Add((Inputs[Y + X]));
-                        Mean += (Inputs[Y + X]);
-
-                        X++;
-                    }
-
-                    Mean /= Inputs.GetUpperBound(0);
-                    StdDev = CalculateStandardDeviation(Inputs, Mean);
-
-
-
-                    X = 0;
-                    while (X < Inputs.GetUpperBound(0))
-                    {
-                        if (StdDev == 0)
-                        {
-                            Inputs[X] = (0);
-                        }
-                        else
-                        {
-                            Inputs[X] = ((Inputs[X] - Mean) / StdDev);
-                        }
-
-                        X++;
-                    }
-
-                    break;
-            }
-
-            return Inputs;
         }
 
         public List<double> NormalizeDataSet(List<double> Inputs, int NormalizationMethodID)
