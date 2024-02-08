@@ -13,59 +13,107 @@ namespace MaddoxNET
     public class ANN_Perf
     {
         public double[][][] Weights = new double [0][][];
-        public double [][][] WeightDeltas = new double[0][][];
-        public double [][][] PrevWeights = new double [0][][];
-        public double [][][] PrevWeightsM = new double[0][][];
-        public double [][][] PrevWeightsV = new double [0][][];
-        public double [][] Activations = new double[0][];
-        public double [][] NetInputs = new double[0][];
-        public double [][] Errors = new double[0][];
+        //public double [][][] WeightDeltas = new double[0][][];
+        //public double [][][] PrevWeights = new double [0][][];
+        public double [][][][] OptimizerVals = new double[0][][][];
+        public double[][][][][] BatchNormOptimizerVals = new double[0][][][][];
+        public double[][][] BatchNormActivations;
+        public double[][][] BatchNormNetInputs;
+        public double[][][] BatchNormErrors;
+        public double[][][] BatchNormDeltas;
+        public double[][][] BatchNormDerivatives;
+        public int[] BatchNormLayers;
+        public double [][] Activations;
+        public double [][] NetInputs;
+        public double [][] Errors;
         public int [] ActivationFunctions = new int[0];
         public double [][] BatchNormPopStats = new double[0][];
         public double LearningRate = 0;
         public double Momentum = 0;
         public double ReLUConst = 0.01;
-        public double RMSPropConst = 0.9;
+        public double RMSPropConst = 0.009;
         public double MeanSquaredError = 0;
         public double B1 = 0.5;
         public double B2 = 0.999;
         public double WeightClipFactor = 0.0001;
+        public double SwishConst =1;
+        public double ELUConst = 0.99;
         public List<double> NormalizationConsts = new List<double>();
+        public double[][] BatchNormAvg;
+        public double[][] BatchNormVar;
+        public double[][] BatchNormBeta;
+        public double[][] BatchNormGamma;
+        public double[][] BatchNormGammaMovingAvg;
+        public double[][] BatchNormBetaMovingAvg;
 
 
-        public ANN_Perf(int [] LayerCounts,int [] ActivationFunctions,int LossFunction,double LearningRate,double MomentumFactor,int WeightInitializationID = 0)
+        public ANN_Perf(int[] LayerCounts, int[] ActivationFunctions, int[] BatchNormLayers, int LossFunction,double LearningRate,double MomentumFactor,int WeightInitializationID = 0,int BatchSize = 3)
         {
             int X = 0;
             int Y = 0;
             int Z = 0;
-            double [] LayerActivations;
+            int A = 0;
+            double[] LayerActivations;
             double[] LayerNetInputs;
             double[] LayerError;
+            double[] BatchError;
+            double[] BatchGamma;
+            double[] BatchBeta;
+            double[] BatchAvg;
+            double[] BatchVar;
+            double[] BatchGammaMoving;
+            double[] BatchBetaMoving;
+            double[][] BatchGammaMoving2;
+            double[][] BatchBetaMoving2;
+            double[] BatchNetInputs;
+            double[] BatchActivations;
+            double[] BatchDerivatives;
+            double[] BatchDelta;
+            double[] OptimizerTempA;
+            double[] OptimizerTempB;
+            double[] TempList1;
+            double[][] TempList2;
+            double[][][] TempList3;
+            double[][][][] TempList4;
+            double[][] BatchDerivatives2;
+            double[][] BatchError2 = new double[0][];
+            double[][] BatchNetInputs2 = new double[0][];
+            double[][] BatchActivations2 = new double[0][];
+            double[][] BatchDelta2 = new double[0][];
+            double[][][] BatchDelta3 = new double[0][][];
             double [][] LayerWeights;
             double [] NeuronWeights;
-            double [][] PrevLayerWeightsM;
-            double [][] PrevLayerWeightsV;
-            double [][] PrevLayerWeights;
-            double [] PrevNeuronWeightsM;
-            double [] PrevNeuronWeightsV;
-            double [] PrevNeuronWeights;
+            double[][][] OptimizerTemp3;
+            double[][][][] OptimizerTemp4;
+            double[][] OptimizerTemp2;
             Random Rnd = new Random(System.Guid.NewGuid().GetHashCode());
             double U1 = Rnd.NextDouble();
             double U2 = Rnd.NextDouble();
             double Z1 = Math.Sqrt(-2.0f * Math.Log(U1)) * Math.Cos(2.0f * Math.PI * U2);
             double Z2 = Math.Sqrt(-2.0f * Math.Log(U1)) * Math.Sin(2.0f * Math.PI * U2);
-            double StdDev = 0.005;
+            double StdDev = 0.02;
             double TempVal = 0;
 
-
+            this.BatchNormLayers = BatchNormLayers;
             this.Weights = new double[LayerCounts.Length][][];
-            this.WeightDeltas = new double[LayerCounts.Length][][]; 
-            this.PrevWeights = new double[LayerCounts.Length][][];
-            this.PrevWeightsM = new double[LayerCounts.Length][][];
-            this.PrevWeightsV = new double[LayerCounts.Length][][];
             this.Activations = new double[LayerCounts.Length][];
             this.NetInputs = new double[LayerCounts.Length][];
             this.Errors = new double[LayerCounts.Length][];
+
+            this.BatchNormActivations = new double[BatchSize][][];
+            this.BatchNormNetInputs = new double[BatchSize][][];
+            this.BatchNormErrors = new double[BatchSize][][];
+            this.BatchNormDeltas = new double[LayerCounts.Length][][];
+            this.BatchNormDerivatives = new double[BatchSize][][];
+            this.BatchNormOptimizerVals = new double[BatchSize][][][][];
+
+
+            this.BatchNormGamma = new double[LayerCounts.Length][];
+            this.BatchNormBeta = new double[LayerCounts.Length][];
+            this.BatchNormAvg = new double[LayerCounts.Length][];
+            this.BatchNormVar = new double[LayerCounts.Length][];
+            this.BatchNormBetaMovingAvg = new double[LayerCounts.Length][];
+            this.BatchNormGammaMovingAvg = new double[LayerCounts.Length][];
 
             this.ActivationFunctions = ActivationFunctions;
             this.LearningRate = LearningRate;
@@ -74,78 +122,150 @@ namespace MaddoxNET
             //Layer
             while(X < LayerCounts.Length)
             {
-                //Neuron
-                PrevLayerWeightsM = new double[LayerCounts[X]][];
-                PrevLayerWeightsV = new double[LayerCounts[X]][];
-                PrevLayerWeights = new double[LayerCounts[X]][];
+                //PrevLayerWeights = new double[LayerCounts[X]][];
                 LayerWeights = new double[LayerCounts[X]][];
                 LayerActivations = new double[LayerCounts[X]];
                 LayerNetInputs = new double[LayerCounts[X]];
                 LayerError = new double[LayerCounts[X]];
+                BatchDelta2 = new double[LayerCounts[X]][];
+                BatchVar = new double[LayerCounts[X]];
+                BatchGamma = new double[LayerCounts[X]];
+                BatchAvg = new double[LayerCounts[X]];
+                BatchBeta = new double[LayerCounts[X]];
+                BatchGammaMoving = new double[LayerCounts[X]];
+                BatchBetaMoving = new double[LayerCounts[X]];
+
                 Rnd = new Random(System.Guid.NewGuid().GetHashCode());
                 Y = 0;
                 while(Y < LayerCounts[X])
                 {
-                    LayerActivations[Y] = Rnd.NextDouble();
-                    LayerNetInputs[Y] = 0;
-                    LayerError[Y] = 0;
-
                     NeuronWeights = new double[LayerCounts[Math.Max(0, X - 1)]];
-                    PrevNeuronWeightsM = new double[LayerCounts[Math.Max(0, X - 1)]];
-                    PrevNeuronWeightsV = new double[LayerCounts[Math.Max(0, X - 1)]];
-                    PrevNeuronWeights = new double[LayerCounts[Math.Max(0, X - 1)]];
+                    OptimizerTemp3 = new double[LayerCounts[Math.Max(0, X - 1)]][][];
+                    BatchDelta = new double[LayerCounts[Math.Max(0, X - 1)]];
+
 
                     //Dendrite
                     Z = 0;
                     while(Z < LayerCounts[Math.Max(0,X-1)])
                     {
-                        U1 = Rnd.NextDouble();
-                        U2 = Rnd.NextDouble();
-                        Z1 = Math.Sqrt(-2.0f * Math.Log(U1)) * Math.Cos(2.0f * Math.PI * U2);
+                        U1 = 1.0 - Rnd.NextDouble();
+                        U2 = 1.0 - Rnd.NextDouble();
+                        Z1 = Math.Sqrt(-2.0 * Math.Log(U1)) * Math.Cos(2 * Math.PI * U2);
 
-                        if (Rnd.Next() % 3 == 0)
-                        {
-                            TempVal =  (Rnd.NextDouble() * (0.009 - 0.001) + 0.001) * -1;
-                        }
-                        else
-                        {
-                            TempVal = Rnd.NextDouble() * (0.009 - 0.001) + 0.001;
-                        }
-
-
-                        NeuronWeights[Z] = TempVal;
-
-
-
-
-                        PrevNeuronWeightsM[Z] = 0;
-                        PrevNeuronWeightsV[Z] = 0;
-                        PrevNeuronWeights[Z] =0;
+                        
+                        NeuronWeights[Z] = Z1 * 0.1;
+                        BatchDelta[Z] = 0;
 
                         Z++;
                     }
 
-
-
                     LayerWeights[Y] = NeuronWeights;
-                    PrevLayerWeightsM[Y] = PrevNeuronWeightsM;
-                    PrevLayerWeightsV[Y] = PrevNeuronWeightsV;
-                    PrevLayerWeights[Y] = PrevNeuronWeights;
+                    LayerActivations[Y] = 0;
+                    LayerNetInputs[Y] = 0;
+                    LayerError[Y] = 0;
+                    BatchDelta2[Y] = BatchDelta;
+                    BatchAvg[Y] = 0;
+                    BatchVar[Y] = 0;
+                    BatchGamma[Y] = 1;
+                    BatchBeta[Y] = 0;
+                    BatchGammaMoving[Y] =0;
+                    BatchBetaMoving[Y] = 0;
+
 
                     Y++;
                 }
 
-                this.Activations[X] = LayerActivations;
-                this.NetInputs[X] = LayerNetInputs;
-                this.Errors[X] = LayerError;
-                this.PrevWeightsV[X] = PrevLayerWeightsV;
-                this.PrevWeightsM[X] = PrevLayerWeightsM;
+                //this.NetInputs[X] = LayerNetInputs;
+                //this.Errors[X] = LayerError;
+                //this.Activations[X] = LayerActivations;                
                 this.Weights[X] = LayerWeights;
-                this.WeightDeltas[X] = PrevLayerWeights;
-                this.PrevWeights[X] = PrevLayerWeights;
+
+                this.BatchNormAvg[X] = BatchAvg;
+                this.BatchNormVar[X] = BatchVar;
+                this.BatchNormGamma[X] = BatchGamma;
+                this.BatchNormBeta[X] = BatchBeta;
+                this.BatchNormGammaMovingAvg[X] = BatchGammaMoving;
+                this.BatchNormBetaMovingAvg[X] = BatchBetaMoving;
+
+                this.BatchNormDeltas[X] = BatchDelta2;
+
 
                 X++;
             }
+
+
+
+            this.BatchNormActivations = new double[BatchSize][][];
+            this.BatchNormNetInputs = new double[BatchSize][][];
+            this.BatchNormErrors = new double[BatchSize][][];
+            this.BatchNormDerivatives = new double[BatchSize][][];
+            this.BatchNormOptimizerVals = new double[BatchSize][][][][];
+
+            A = 0;
+            while(A < BatchSize)
+            {
+                TempList4 = new double[LayerCounts.Length][][][];
+                BatchError2 = new double[LayerCounts.Length][];
+                BatchNetInputs2 = new double[LayerCounts.Length][];
+                BatchActivations2 = new double[LayerCounts.Length][];
+                BatchDerivatives2 = new double[LayerCounts.Length][];
+                X = 0;
+                while(X < LayerCounts.Length)
+                {
+                    TempList3 = new double[LayerCounts[X]][][];
+                    BatchError = new double[LayerCounts[X]];
+                    BatchNetInputs = new double[LayerCounts[X]];
+                    BatchActivations = new double[LayerCounts[X]];
+                    BatchDerivatives = new double[LayerCounts[X]];
+
+                    Y = 0;
+                    while (Y < LayerCounts[X])
+                    {
+                        TempList2 = new double[LayerCounts[Math.Max(0, X - 1)]][];
+
+                        BatchError[Y] = 0;
+                        BatchNetInputs[Y] = 0;
+                        BatchActivations[Y] = 0;
+                        BatchDerivatives[Y] = 0;
+
+                        //Dendrite
+                        Z = 0;
+                        while (Z < LayerCounts[Math.Max(0, X - 1)])
+                        {
+                            TempList1 = new double[2];
+                            TempList1[0] = 0;
+                            TempList1[1] = 0;
+
+                            TempList2[Z] = TempList1;
+
+                            Z++;
+                        }
+
+                        TempList3[Y] = TempList2;
+
+                        Y++;
+                    }
+
+                    BatchError2[X] = BatchError;
+                    BatchNetInputs2[X] = BatchNetInputs;
+                    BatchActivations2[X] = BatchActivations;
+                    BatchDerivatives2[X] = BatchDerivatives;
+
+                    TempList4[X] = TempList3;
+
+                    X++;
+                }
+
+                this.BatchNormOptimizerVals[A] = TempList4;
+                this.BatchNormErrors[A] = BatchError2;
+                this.BatchNormNetInputs[A] = BatchNetInputs2;
+                this.BatchNormActivations[A] = BatchActivations2;
+                this.BatchNormDerivatives[A] = BatchDerivatives2;
+
+                A++;
+            }
+            
+
 
             switch(WeightInitializationID)
             {
@@ -164,6 +284,8 @@ namespace MaddoxNET
             }
             //XavierInitialize();
             //HeInitialize();
+
+
         }
 
         public void XavierInitialize()
@@ -214,6 +336,110 @@ namespace MaddoxNET
             }
 
 
+        }
+
+        public double[][] ScaleAndShift(double[][] Inputs,int LayerID)
+        {
+            double[][] Outputs;
+            double[] SubOutputs;
+            int X = 0;
+            int Y = 0;
+
+            Outputs = new double[Inputs.Length][];
+
+            while(X < Inputs.Length)
+            {
+                SubOutputs = new double[Inputs[X].Length];
+                Y = 0;
+                while(Y < Inputs[X].Length)
+                {
+                    SubOutputs[Y] = Inputs[X][Y] * this.BatchNormGamma[LayerID][Y] + this.BatchNormBeta[LayerID][Y];
+
+                    Y++;
+                }
+
+                Outputs[X] = SubOutputs;
+
+                X++;
+            }
+
+            return Outputs;
+        }
+
+        public double[][] NormalizeBatch(double[][] Inputs, int LayerID)
+        {
+            double Mean = 0;
+            double Variance = 0;
+            int Counter = 0;
+            int X = 0;
+            int Y = 0;
+            int Z = 0;
+            int ZZ = 0;
+            double[] TempList1;
+            double[][] TempList2;
+            double[][][] TempList3;
+            double[][][][] TempList4;
+
+            while (X < Inputs.Length)
+            {
+                Y = 0;
+                while (Y < Inputs[X].Length)
+                {
+                    Mean += Inputs[X][Y];
+                    Counter++;
+
+                    Y++;
+                }
+
+                X++;
+            }
+
+            Mean /= Counter;
+
+            Counter = 0;
+            X = 0;
+            while (X < Inputs.Length)
+            {
+                Y = 0;
+                while (Y < Inputs[X].Length)
+                {
+                    Variance += Math.Pow(Inputs[X][Y] - Mean, 2);
+
+                    Counter++;
+
+                    Y++;
+                }
+
+                X++;
+            }
+
+            Variance /= Counter;
+            Variance = Math.Sqrt(Variance);
+
+            TempList2 = new double[Inputs.Length][];
+            X = 0;
+            while (X < Inputs.Length)
+            {
+                TempList1 = new double[Inputs[X].Length];
+                Y = 0;
+                while (Y < Inputs[X].Length)
+                {
+                    TempList1[Y] = (Inputs[X][Y] - Mean) / Variance;
+
+                    this.BatchNormAvg[LayerID][Y] = (1 - 0.99) * this.BatchNormAvg[LayerID][Y] + (0.9 * Mean);
+                    this.BatchNormVar[LayerID][Y] = (1 - 0.99) * Math.Pow(this.BatchNormVar[LayerID][Y], 2) + (0.9 * Math.Pow(Variance, 2));
+
+                    Y++;
+                }
+
+                TempList2[X] = TempList1;
+
+                X++;
+            }
+
+
+
+            return TempList2;
         }
 
         public void HeInitialize()
@@ -393,6 +619,263 @@ namespace MaddoxNET
             return RetVal;
         }
 
+
+
+        public double[][] ActivateBatch(double[][] Inputs,int LayerID)
+        {
+            double[] TempList;
+            double[][] TempList2;
+            int X = 0;
+            int Y = 0;
+
+            TempList2 = new double[Inputs.Length][];
+
+            while(X < Inputs.Length)
+            {
+                TempList = new double[Inputs[X].Length];
+                Y = 0;
+                while(Y < Inputs[X].Length)
+                {
+                    TempList[Y] = this.ActivationFunction(Inputs[X][Y], this.ActivationFunctions[LayerID]);
+
+                    Y++;
+                }
+
+                TempList2[X] = TempList;
+
+                X++;
+            }
+
+            return TempList2;
+        }
+
+        public double[][] DerivativeBatch(double[][] Inputs, int LayerID)
+        {
+            double[] TempList;
+            double[][] TempList2;
+            int X = 0;
+            int Y = 0;
+
+            TempList2 = new double[Inputs.Length][];
+
+            while (X < Inputs.Length)
+            {
+                TempList = new double[Inputs[X].Length];
+                Y = 0;
+                while (Y < Inputs[X].Length)
+                {
+                    TempList[Y] = this.ActivationFunctionDerivative(Inputs[X][Y], this.ActivationFunctions[LayerID]);
+
+                    Y++;
+                }
+
+                TempList2[X] = TempList;
+
+                X++;
+            }
+
+            return TempList2;
+        }
+
+        public void ZeroOutNetwork(int BatchSize)
+        {
+            int X = 0;
+            int Y = 0;
+            int Z = 0;
+            int ZZ = 0;
+            int A = 0;
+            double[] TempList1;
+            double[][] TempList2;
+            double[] TempListB1;
+            double[][] TempListB2;
+            double[] TempListE1;
+            double[][] TempListE2;
+            double[] TempListO1;
+            double[][] TempListO2;
+            double[][][] TempListO3;
+            double[][][][] TempListO4;
+            double[] TempListD1;
+            double[][] TempListD2;
+            double[][][] TempListD3;
+
+
+            this.BatchNormActivations = new double[BatchSize][][];
+            this.BatchNormNetInputs = new double[BatchSize][][];
+            this.BatchNormErrors = new double[BatchSize][][];
+
+            X = 0;
+            while (X < BatchSize)
+            {
+                TempList2 = new double[this.BatchNormAvg.Length][];
+                TempListB2 = new double[this.BatchNormAvg.Length][];
+                TempListE2 = new double[this.BatchNormAvg.Length][];
+                Y = 0;
+                while (Y < this.BatchNormAvg.Length)
+                {
+                    TempList1 = new double[this.BatchNormAvg[Y].Length];
+                    TempListB1 = new double[this.BatchNormAvg[Y].Length];
+                    TempListE1 = new double[this.BatchNormAvg[Y].Length];
+                    Z = 0;
+                    while (Z < this.BatchNormAvg[Y].Length)
+                    {
+                        TempList1[Z] = 0;
+                        TempListB1[Z] = 0;
+                        TempListE1[Z] = 0;
+
+                        Z++;
+                    }
+
+                    TempList2[Y] = TempList1;
+                    TempListB2[Y] = TempListB1;
+                    TempListE2[Y] = TempListE1;
+
+                    Y++;
+                }
+
+                this.BatchNormNetInputs[X] = TempList2;
+                this.BatchNormActivations[X] = TempListB2;
+                this.BatchNormErrors[X] = TempListE2;
+
+                X++;
+            }
+
+            this.BatchNormOptimizerVals = new double[BatchSize][][][][];
+            //this.BatchNormDeltas = new double[BatchSize][][];
+
+            A = 0;
+            while(A < BatchSize)
+            {
+                TempListO4 = new double[this.Weights.Length][][][];
+                X = 0;
+                while(X < this.Weights.Length)
+                {
+                    TempListO3 = new double[this.Weights[X].Length][][];
+                    Y = 0;
+                    while(Y < this.Weights[X].Length)
+                    {
+                        TempListO2 = new double[this.Weights[X][Y].Length][];
+                        Z = 0;
+                        while(Z < this.Weights[X][Y].Length)
+                        {
+                            TempListO1 = new double[2];
+                            TempListO1[0] = 0;
+                            TempListO1[1] = 0;
+
+
+                            TempListO2[Z] = TempListO1;
+
+                            this.BatchNormDeltas[X][Y][Z] = 0;
+
+                            Z++;
+                        }
+
+                        TempListO3[Y] = TempListO2;
+
+                        Y++;
+                    }
+
+                    TempListO4[X] = TempListO3;
+
+                    X++;
+                }
+
+                this.BatchNormOptimizerVals[A] = TempListO4;
+
+                A++;
+            }
+        }
+
+        public void ForwardPropagateBatch(double[][] Inputs)
+        {
+            int X = 0;
+            int Y = 0;
+            int Z = 0;
+            int ZZ = 0;
+            int A = 0;
+            double NetSignal = 0;
+            double[] TempList = new double[0];
+            double[][] TempList2;
+
+            ZeroOutNetwork(Inputs.Length);
+
+
+            if (this.BatchNormLayers[0] == 1)
+            {
+                TempList2 = this.ActivateBatch(this.ScaleAndShift(this.NormalizeBatch(Inputs, 0), 0), 0);
+            }
+            else
+            {
+                TempList2 = this.ActivateBatch(Inputs,0);
+            }
+            
+            
+            X = 0;
+            while(X < TempList2.Length)
+            {
+                this.BatchNormActivations[X][0] = TempList2[X];
+                
+                X++;
+            }
+
+            ///////
+
+            X = 1;
+            while (X < this.BatchNormActivations[0].Length)
+            {
+                TempList2 = new double[Inputs.Length][];
+                A = 0;
+                while(A < Inputs.Length)
+                {
+                    TempList = new double[this.BatchNormActivations[A][X].Length];
+                    Y = 0;
+                    while (Y < this.BatchNormActivations[A][X].Length)
+                    {
+                        NetSignal = 0;
+                        Z = 0;
+                        while (Z < this.BatchNormActivations[A][X - 1].Length)
+                        {
+                            NetSignal += (this.Weights[X][Y][Z] * this.BatchNormActivations[A][X - 1][Z]);
+
+                            Z++;
+                        }
+
+                        TempList[Y] = NetSignal;
+
+                        Y++;
+                    }
+
+                    TempList2[A] = TempList;
+
+                    this.BatchNormNetInputs[A][X] = TempList;
+
+                    A++;
+                }
+
+                if (this.BatchNormLayers[X] == 1)
+                {
+                    TempList2 = this.ActivateBatch(this.ScaleAndShift(this.NormalizeBatch(TempList2, X), X), X);
+                }
+                else
+                {
+                    TempList2 = this.ActivateBatch(((TempList2)), X);
+                }
+
+                
+                
+
+                A = 0;
+                while(A < TempList2.Length)
+                {
+                    this.BatchNormActivations[A][X] = TempList2[A];
+
+                    A++;
+                }
+
+                X++;
+            }
+
+        }
+
         public void ForwardPropagate(double[] Inputs,int OutputNormalizationMethod,bool NormalizeOutputLayer = true)
         {
             int X = 0;
@@ -407,7 +890,7 @@ namespace MaddoxNET
             X = 0;
             while(X < Limit)
             {
-                Debug.Print("MISMATCH");
+                
 
                 X++;
             }
@@ -415,7 +898,16 @@ namespace MaddoxNET
             X = 0;
             while(X < this.Activations[0].Length)
             {
+                if(X >= Inputs.Length)
+                {
+
+                    this.NetInputs[0][X] = 0;
+                }
+                else
+                {
                     this.NetInputs[0][X] = Inputs[X];
+                }
+                    
 
 
                 //this.Activations[0][X] = this.ActivationFunction(Inputs[X], this.ActivationFunctions[0]);
@@ -469,18 +961,6 @@ namespace MaddoxNET
                     Y++;
                 }
 
-                //if (X == this.Activations.Count - 1)
-                //{
-                //    if (NormalizeOutputLayer == true)
-                //    {
-                //        this.NetInputs[X] = this.NormalizeDataSet(this.NetInputs[X], 3);
-                //    }
-                //}
-                //else
-                //{
-                //    this.NetInputs[X] = this.NormalizeDataSet(this.NetInputs[X], 3);
-                //}
-
                 Y = 0;
                 while(Y < this.Activations[X].Length)
                 {
@@ -493,18 +973,6 @@ namespace MaddoxNET
 
                     Y++;
                 }
-
-                //if (X == this.Activations.Count - 1)
-                //{
-                //    if (NormalizeOutputLayer == true)
-                //    {
-                //        this.Activations[X] = this.NormalizeDataSet(this.Activations[X], 3);
-                //    }
-                //}
-                //else
-                //{
-                //    this.Activations[X] = this.NormalizeDataSet(this.Activations[X], 3);
-                //}
 
                 X++;
             }
@@ -522,13 +990,13 @@ namespace MaddoxNET
         {
             int X = 0;
             int ActivationIndex = 0;
-            double MaxActivation = this.Activations[1][0];
+            double MaxActivation = this.BatchNormActivations[0][2][0];
 
-            while (X < this.Activations[this.Activations.Length - 1].Length)
+            while (X < this.BatchNormActivations[0][this.Activations.Length - 1].Length)
             {
-                if ((this.Activations[1][X]) > (MaxActivation))
+                if ((this.BatchNormActivations[0][2][X]) > (MaxActivation))
                 {
-                    MaxActivation = this.Activations[1][X];
+                    MaxActivation = this.BatchNormActivations[0][2][X];
                     ActivationIndex = X;
                 }
 
@@ -570,25 +1038,654 @@ namespace MaddoxNET
             this.LearningRate = TempVal;
         }
 
-        public void FindOutlier(List<double> Inputs)
+
+        public void BackPropagateBatch(double[][] Inputs, double[][] Outputs, int OutputNormalizationMethod, bool TrainWeights, int OptimizerID, bool OnlyError = false, bool NormalizeOutputLayer = true, double AdditionalVal = 0, double AdditionalVal2 = 0)
         {
             int X = 0;
-            List<double> ZScores = new List<double>();
+            int Y = 0;
+            int Z = 0;
+            int ZZ = 0;
+            int A = 0;
+            int B = 0;
+            double L2 = 0;
+            double Delta = 0;
+            double MSE = 0;
+            double TempVal = 0;
+            double ADAMDelta = 0;
+            double RMSPropDelta = 0;
+            double SGDDelta = 0;
+            //List<List<List<double>>> NewWeights = this.Weights;
+            //List<List<List<double>>> NewPrevWeights = this.PrevWeights;
+            double[] TempList;
 
-            //while(X < Inputs.Count)
-            //{
-            //    ZScores.Add(this.ZScore(Inputs, Inputs[X]));
+            this.ForwardPropagateBatch(Inputs);
 
-            //    X++;
-            //}
 
-            //X = 0;
-            //while(X < ZScores.Count)
-            //{
-            //    Debug.Print(ZScores[X].ToString());
+            ////////////////////////////
 
-            //    X++;
-            //}
+            
+
+            X = 0;
+            while (X < this.BatchNormActivations[0][this.Activations.Length - 1].Length)
+            {
+                Y = 0;
+                while(Y < Inputs.Length)
+                {
+                    //L2 = this.BatchNormActivations[Y][this.Activations.Length - 1][X] - Outputs[Y][X];
+                    //L2 = -((Outputs[X] / this.Activations[this.Activations.Length - 1][X]) - ((1.0f - Outputs[X]) / (1.0f - this.Activations[this.Activations.Length - 1][X])));
+
+
+                    if (Outputs[Y][X] == 1)
+                    {
+                        //L2 = -1.0 / this.BatchNormActivations[Y][this.Activations.Length - 1][X];
+                        L2 = this.BatchNormActivations[Y][this.Activations.Length - 1][X] - 1.0;
+                    }
+                    else
+                    {
+
+                        //L2 = -1.0 / (1.0 - this.BatchNormActivations[Y][this.Activations.Length - 1][X]);
+                        L2 = this.BatchNormActivations[Y][this.Activations.Length - 1][X];
+                    }
+
+                    if (OutputNormalizationMethod != 2)
+                    {
+                        L2 *= this.ActivationFunctionDerivative(this.BatchNormNetInputs[Y][this.Activations.Length - 1][X], this.ActivationFunctions[this.Activations.Length - 1]);
+                    }
+
+                    this.BatchNormErrors[Y][this.Errors.Length - 1][X] = L2;
+
+
+                    Delta = this.BatchNormErrors[Y][this.Weights.Length - 1][X] * this.BatchNormActivations[Y][this.Weights.Length - 1][X];
+                    this.BatchNormGammaMovingAvg[this.Weights.Length - 1][X] = (this.RMSPropConst * this.BatchNormGammaMovingAvg[this.Weights.Length - 1][X]) + ((Math.Pow(Delta, 2) * (1 - this.RMSPropConst)));
+                    RMSPropDelta = this.LearningRate * Delta / Math.Sqrt(this.BatchNormGammaMovingAvg[this.Weights.Length - 1][X] + 0.000000000000000000001) ;
+
+
+                    this.BatchNormGamma[this.Weights.Length - 1][X] -= (RMSPropDelta);
+
+
+                    Delta = this.BatchNormErrors[Y][this.Weights.Length - 1][X];
+                    this.BatchNormBetaMovingAvg[this.Weights.Length - 1][X] = ((Math.Pow(Delta, 2) * (1 - this.RMSPropConst))) + (this.RMSPropConst * this.BatchNormBetaMovingAvg[this.Weights.Length - 1][X]);
+                    RMSPropDelta = this.LearningRate * Delta / Math.Sqrt(this.BatchNormBetaMovingAvg[this.Weights.Length - 1][X] + 0.000000000000000000001);
+
+                    if (double.IsNaN(RMSPropDelta))
+                    {
+                        break;
+                    }
+
+                    this.BatchNormBeta[this.Weights.Length - 1][X] -= (RMSPropDelta);
+
+
+
+                    Z = 0;
+                    while (Z < this.Weights[this.Weights.Length - 1][X].Length)
+                    {
+                        Delta = this.BatchNormErrors[Y][this.Errors.Length - 1][X] * this.BatchNormActivations[Y][this.Activations.Length - 2][Z];
+
+
+                        if (OutputNormalizationMethod == 2)
+                        {
+                            //Delta *= SoftmaxDerivatives[X];
+                        }
+
+                        switch (OptimizerID)
+                        {
+                            case 0:
+                                //this.PrevWeights[this.Errors.Count - 1][X][Y] += Delta;
+                                //this.Weights[this.Weights.Count - 1][X][Y] = this.Weights[this.Weights.Count - 1][X][Y] - (SGDDelta + (0 * this.PrevWeights[this.Errors.Count - 1][X][Y]));
+                                break;
+
+                            case 1:
+                                TempVal = (this.RMSPropConst * this.BatchNormOptimizerVals[Y][this.Weights.Length - 1][X][Z][0]) + ((Math.Pow(Delta, 2) * (1 - this.RMSPropConst)));
+
+                                if (TempVal < 0)
+                                {
+                                    break;
+                                }
+
+                                this.BatchNormOptimizerVals[Y][this.Weights.Length - 1][X][Z][0] = TempVal;
+                                RMSPropDelta = this.LearningRate * Delta / Math.Sqrt(TempVal + 0.000000000000000000001);
+                                Delta = RMSPropDelta;
+                                break;
+
+                            case 2:
+                                this.BatchNormOptimizerVals[Y][this.Errors.Length - 1][X][Z][0] = (this.B1 * this.BatchNormOptimizerVals[Y][this.Errors.Length - 1][X][Z][0] + (1.0f - this.B1) * Delta);
+                                this.BatchNormOptimizerVals[Y][this.Errors.Length - 1][X][Z][1] = (this.B2 * this.BatchNormOptimizerVals[Y][this.Errors.Length - 1][X][Z][1] + (1.0f - this.B2) * Math.Pow(Delta, 2));
+
+                                ADAMDelta = (this.BatchNormOptimizerVals[Y][this.Errors.Length - 1][X][Z][0] / (1.0f - this.B1)) / (Math.Sqrt(this.BatchNormOptimizerVals[Y][this.Errors.Length - 1][X][Z][1] + 0.000000000000000000001) / (1.0f - this.B2));
+                                //this.Weights[this.Weights.Length - 1][X][Y] = this.Weights[this.Weights.Length - 1][X][Y] - this.LearningRate * ADAMDelta;
+                                Delta = ADAMDelta;
+
+                                break;
+                        }
+
+
+                        if (TrainWeights)
+                        {
+                            this.BatchNormDeltas[this.Weights.Length - 1][X][Z] += (Delta * this.LearningRate);
+                        }
+
+
+                        Z++;
+                    }
+
+                    Y++;
+                }
+
+
+
+
+                X++;
+            }
+
+
+            X = this.Weights.Length - 2;
+
+            while (X >= 0)
+            {
+                Y = 0;
+                while (Y < this.BatchNormActivations[0][X].Length)
+                {
+                    ZZ = 0;
+                    while (ZZ < Inputs.Length)
+                    {
+                        Delta = 0;
+                        Z = 0;
+                        while (Z < this.BatchNormActivations[ZZ][X + 1].Length)
+                        {
+                            Delta += (this.BatchNormErrors[ZZ][X + 1][Z] * this.Weights[X + 1][Z][Y]);
+
+                            Z++;
+                        }
+
+                        this.BatchNormErrors[ZZ][X][Y] = Delta * this.ActivationFunctionDerivative(this.BatchNormNetInputs[ZZ][X][Y], this.ActivationFunctions[X]);
+
+                        Delta = this.BatchNormErrors[ZZ][X][Y] * this.BatchNormActivations[ZZ][X][Y];
+                        this.BatchNormGammaMovingAvg[X][Y] = (this.RMSPropConst * this.BatchNormGammaMovingAvg[X][Y]) + ((Math.Pow(Delta, 2) * (1 - this.RMSPropConst)));
+                        RMSPropDelta = this.LearningRate * Delta / Math.Sqrt(this.BatchNormGammaMovingAvg[X][Y] + 0.000000000000000000001);
+
+
+                        this.BatchNormGamma[X][Y] -= (RMSPropDelta);
+
+
+                        Delta = this.BatchNormErrors[ZZ][X][Y];
+                        this.BatchNormBetaMovingAvg[X][Y] = (this.RMSPropConst * this.BatchNormBetaMovingAvg[X][Y]) + ((Math.Pow(Delta, 2) * (1 - this.RMSPropConst)));
+                        RMSPropDelta = this.LearningRate * Delta / Math.Sqrt(this.BatchNormBetaMovingAvg[X][Y] + 0.000000000000000000001);
+
+
+                        this.BatchNormBeta[X][Y] -= (RMSPropDelta);
+
+                        ZZ++;
+                    }
+
+
+                    Y++;
+                }
+
+                
+
+                Y = 0;
+                while (Y < this.BatchNormActivations[0][X].Length)
+                {
+
+                    if (X >= 0)
+                    {
+                        Z = 0;
+                        while (Z < this.Weights[X][Y].Length)
+                        {
+                            ZZ = 0;
+                            while(ZZ < Inputs.Length)
+                            {
+                                if(X == 0)
+                                {
+                                    Delta = this.BatchNormErrors[ZZ][X][Y] * Inputs[ZZ][Z];
+                                }
+                                else
+                                {
+                                    Delta = this.BatchNormErrors[ZZ][X][Y] * this.BatchNormActivations[ZZ][(X - 1)][Z];
+                                }
+                                
+                                //Delta = this.Errors[X][Y];
+
+                                if (TrainWeights)
+                                {
+
+                                    switch (OptimizerID)
+                                    {
+                                        case 0:
+
+                                            //this.PrevWeights[X][Y][Z] += Delta;
+                                            break;
+
+                                        case 1:
+                                            TempVal = (this.RMSPropConst * this.BatchNormOptimizerVals[ZZ][X][Y][Z][0]) + ((Math.Pow(Delta, 2) * (1 - this.RMSPropConst)));
+
+                                            if (TempVal < 0)
+                                            {
+                                                break;
+                                            }
+
+                                            this.BatchNormOptimizerVals[ZZ][X][Y][Z][0] = TempVal;
+                                            RMSPropDelta = this.LearningRate * Delta / Math.Sqrt(TempVal + 0.000000000000000000001);
+                                            Delta = RMSPropDelta;
+                                            break;
+
+                                        case 2:
+                                            this.BatchNormOptimizerVals[ZZ][X][Y][Z][0] = (this.B1 * this.BatchNormOptimizerVals[ZZ][X][Y][Z][0] + (1.0f - this.B1) * Delta);
+                                            this.BatchNormOptimizerVals[ZZ][X][Y][Z][1] = (this.B2 * this.BatchNormOptimizerVals[ZZ][X][Y][Z][1] + (1.0f - this.B2) * Math.Pow(Delta, 2));
+                                            ADAMDelta = (this.BatchNormOptimizerVals[ZZ][X][Y][Z][0] / (1.0f - this.B1)) / Math.Sqrt(((this.BatchNormOptimizerVals[ZZ][X][Y][Z][1] + 0.000000000000000000001) / (1.0f - this.B2)));
+                                            //this.Weights[X][Y][Z] = this.Weights[X][Y][Z] - this.LearningRate * ADAMDelta;
+                                            Delta = ADAMDelta;
+                                            break;
+                                    }
+
+                                }
+
+                                if (TrainWeights)
+                                {
+                                    this.BatchNormDeltas[X][Y][Z] += (Delta * this.LearningRate);
+                                }
+
+                                ZZ++;
+                            }
+
+
+                            Z++;
+                        }
+                    }
+
+                    Y++;
+                }
+
+                X--;
+            }
+
+            if(TrainWeights)
+            {
+                ApplyGradients();
+            }
+            
+
+            //this.Weights = NewWeights;
+
+        }
+
+        public double[] Flatten3DVector(double[][][] Input)
+        {
+            //Normal: 2x63x63
+            int X = 0;
+            int Y = 0;
+            int Z = 0;
+            List<double> RetVal = new List<double>();
+            double[] FinalRetVal;
+
+            while (X < Input.Length)
+            {
+                Y = 0;
+                while (Y < Input[X].Length)
+                {
+                    Z = 0;
+                    while (Z < Input[X][Y].Length)
+                    {
+                        RetVal.Add(Input[X][Y][Z]);
+
+                        Z++;
+                    }
+
+                    Y++;
+                }
+
+                X++;
+            }
+
+            FinalRetVal = new double[RetVal.Count];
+
+            X = 0;
+            while (X < RetVal.Count)
+            {
+                FinalRetVal[X] = RetVal[X];
+
+                X++;
+            }
+
+            return FinalRetVal;
+        }
+
+        public double[][][] ExtractBatchList4D(double[][][][] Inputs, int BatchID)
+        {
+            double[] TempList1;
+            double[][] TempList2;
+            double[][][] TempList3 = new double[Inputs.Length][][];
+            double[][][][] TempList4 = new double[Inputs.Length][][][];
+            int X = 0;
+            int Y = 0;
+            int Z = 0;
+
+
+            while (X < Inputs.Length)
+            {
+                TempList2 = new double[Inputs[X].Length][];
+                Y = 0;
+                while (Y < Inputs[X].Length)
+                {
+                    TempList1 = new double[Inputs[X][Y].Length];
+                    Z = 0;
+                    while (Z < Inputs[X][Y].Length)
+                    {
+                        TempList1[Z] = Inputs[X][Y][Z][BatchID];
+
+                        Z++;
+                    }
+
+
+                    TempList2[Y] = TempList1;
+
+                    Y++;
+                }
+
+                TempList3[X] = TempList2;
+
+                X++;
+            }
+
+            return TempList3;
+        }
+
+        public double[][] ExtractBatchList3D(double[][][] Inputs, int BatchID)
+        {
+            double[] TempList1;
+            double[][] TempList2 = new double[Inputs.Length][];
+            int X = 0;
+            int Y = 0;
+            int Z = 0;
+
+
+            while (X < Inputs.Length)
+            {
+                TempList1 = new double[Inputs[X].Length];
+                Y = 0;
+                while (Y < Inputs[X].Length)
+                {
+                    TempList1[Z] = Inputs[X][Y][BatchID];
+
+                    Y++;
+                }
+
+                TempList2[X] = TempList1;
+
+                X++;
+            }
+
+            return TempList2;
+        }
+
+        public void BackPropagateBatchGenerator(double[][] Inputs,double[][] Outputs, int OutputNormalizationMethod, bool TrainWeights, int OptimizerID, double[] AdditionalVal, double[] AdditionalVal2, bool OnlyError = false, bool NormalizeOutputLayer = true)
+        {
+            int X = 0;
+            int Y = 0;
+            int Z = 0;
+            int ZZ = 0;
+            int A = 0;
+            int B = 0;
+            double L2 = 0;
+            double Delta = 0;
+            double MSE = 0;
+            double TempVal = 0;
+            double ADAMDelta = 0;
+            double RMSPropDelta = 0;
+            double SGDDelta = 0;
+            double[][] NewOutputs;
+            //List<List<List<double>>> NewWeights = this.Weights;
+            //List<List<List<double>>> NewPrevWeights = this.PrevWeights;
+            double[] TempList;
+
+            //this.ForwardPropagateBatch(Inputs);
+
+
+            ////////////////////////////
+
+
+
+            X = 0;
+            while (X < this.BatchNormActivations[0][this.BatchNormActivations[0].Length - 1].Length)
+            {
+                Y = 0;
+                while (Y < Inputs.Length)
+                {
+                    //TempVal = -1.0f / AdditionalVal[Y];
+                    TempVal = Outputs[Y][X];
+                    //TempVal *= this.ActivationFunctionDerivative(AdditionalVal2[Y], 1);
+                    //TempVal *= this.ActivationFunctionDerivative(AdditionalVal2, 1);
+                    TempVal *= this.ActivationFunctionDerivative(this.BatchNormNetInputs[Y][this.Activations.Length - 1][X], this.ActivationFunctions[this.ActivationFunctions.Length - 1]);
+
+                    
+
+                    //this.Errors[this.Errors.Count - 1][X] = -(1.0f / (AdditionalVal)) * L2;
+                    this.BatchNormErrors[Y][this.Errors.Length - 1][X] = TempVal;
+                    
+                    Delta = this.BatchNormErrors[Y][this.Weights.Length - 1][X] * this.BatchNormActivations[Y][this.Weights.Length - 1][X];
+                    this.BatchNormGammaMovingAvg[this.Weights.Length - 1][X] = (this.RMSPropConst * this.BatchNormGammaMovingAvg[this.Weights.Length - 1][X]) + ((Math.Pow(Delta, 2) * (1 - this.RMSPropConst)));
+                    RMSPropDelta = this.LearningRate * Delta / Math.Sqrt(this.BatchNormGammaMovingAvg[this.Weights.Length - 1][X] + 0.00000001);
+
+
+                    this.BatchNormGamma[this.Weights.Length - 1][X] -= (RMSPropDelta);
+
+
+                    Delta = this.BatchNormErrors[Y][this.Weights.Length - 1][X];
+                    this.BatchNormBetaMovingAvg[this.Weights.Length - 1][X] = ((Math.Pow(Delta, 2) * (1 - this.RMSPropConst))) + (this.RMSPropConst * this.BatchNormBetaMovingAvg[this.Weights.Length - 1][X]);
+                    RMSPropDelta = this.LearningRate * Delta / Math.Sqrt(this.BatchNormBetaMovingAvg[this.Weights.Length - 1][X] + 0.00000001);
+
+
+                    Z = 0;
+                    while (Z < this.Weights[this.Weights.Length - 1][X].Length)
+                    {
+                        Delta = this.BatchNormErrors[Y][this.Errors.Length - 1][X] * this.BatchNormActivations[Y][this.Activations.Length - 2][Z];
+
+
+                        if (OutputNormalizationMethod == 2)
+                        {
+                            //Delta *= SoftmaxDerivatives[X];
+                        }
+
+                        switch (OptimizerID)
+                        {
+                            case 0:
+                                //this.PrevWeights[this.Errors.Count - 1][X][Y] += Delta;
+                                //this.Weights[this.Weights.Count - 1][X][Y] = this.Weights[this.Weights.Count - 1][X][Y] - (SGDDelta + (0 * this.PrevWeights[this.Errors.Count - 1][X][Y]));
+                                break;
+
+                            case 1:
+                                TempVal = (this.RMSPropConst * this.BatchNormOptimizerVals[Y][this.Weights.Length - 1][X][Z][0]) + ((Math.Pow(Delta, 2) * (1 - this.RMSPropConst)));
+
+
+                                this.BatchNormOptimizerVals[Y][this.Weights.Length - 1][X][Z][0] = TempVal;
+                                RMSPropDelta = this.LearningRate * Delta / Math.Sqrt(TempVal + 0.000000000000000000001);
+                                Delta = RMSPropDelta;
+
+                                //this.Weights[this.Weights.Count - 1][X][Y] = this.Weights[this.Weights.Count - 1][X][Y] - RMSPropDelta;
+                                break;
+
+                            case 2:
+                                this.BatchNormOptimizerVals[Y][this.Errors.Length - 1][X][Z][0] = (this.B1 * this.BatchNormOptimizerVals[Y][this.Errors.Length - 1][X][Z][0] + (1.0f - this.B1) * Delta);
+                                this.BatchNormOptimizerVals[Y][this.Errors.Length - 1][X][Z][1] = (this.B2 * this.BatchNormOptimizerVals[Y][this.Errors.Length - 1][X][Z][1] + (1.0f - this.B2) * Math.Pow(Delta, 2));
+
+                                ADAMDelta = (this.BatchNormOptimizerVals[Y][this.Errors.Length - 1][X][Z][0] / (1.0f - this.B1)) / (Math.Sqrt(this.BatchNormOptimizerVals[Y][this.Errors.Length - 1][X][Z][1] + 0.000000000000000000001) / (1.0f - this.B2));
+                                //this.Weights[this.Weights.Length - 1][X][Y] = this.Weights[this.Weights.Length - 1][X][Y] - this.LearningRate * ADAMDelta;
+                                Delta = ADAMDelta;
+
+                                break;
+                        }
+
+
+                        if (TrainWeights)
+                        {
+                            this.BatchNormDeltas[this.Weights.Length - 1][X][Z] += (Delta * this.LearningRate);
+                        }
+
+
+                        Z++;
+                    }
+
+                    Y++;
+                }
+
+
+
+
+                X++;
+            }
+
+
+            X = this.Activations.Length - 2;
+
+            while (X >= 0)
+            {
+                Y = 0;
+                while (Y < this.BatchNormActivations[0][X].Length)
+                {
+                    ZZ = 0;
+                    while (ZZ < Inputs.Length)
+                    {
+                        Delta = 0;
+                        Z = 0;
+                        while (Z < this.BatchNormActivations[0][X + 1].Length)
+                        {
+                            Delta += (this.BatchNormErrors[ZZ][X + 1][Z] * this.Weights[X + 1][Z][Y]);
+
+                            Z++;
+                        }
+
+                        this.BatchNormErrors[ZZ][X][Y] = Delta * this.ActivationFunctionDerivative(this.BatchNormNetInputs[ZZ][X][Y], this.ActivationFunctions[X]);
+
+
+                        Delta = this.BatchNormErrors[ZZ][X][Y] * this.BatchNormActivations[ZZ][X][Y];
+                        this.BatchNormGammaMovingAvg[X][Y] = (this.RMSPropConst * this.BatchNormGammaMovingAvg[X][Y]) + ((Math.Pow(Delta, 2) * (1 - this.RMSPropConst)));
+                        RMSPropDelta = this.LearningRate * Delta / Math.Sqrt(this.BatchNormGammaMovingAvg[X][Y] + 0.000000000000000000001);
+
+
+                        this.BatchNormGamma[X][Y] -= (RMSPropDelta);
+
+
+                        Delta = this.BatchNormErrors[ZZ][X][Y];
+                        this.BatchNormBetaMovingAvg[X][Y] = (this.RMSPropConst * this.BatchNormBetaMovingAvg[X][Y]) + ((Math.Pow(Delta, 2) * (1 - this.RMSPropConst)));
+                        RMSPropDelta = this.LearningRate * Delta / Math.Sqrt(this.BatchNormBetaMovingAvg[X][Y] + 0.000000000000000000001);
+
+                        this.BatchNormBeta[X][Y] -= (RMSPropDelta);
+
+                        ZZ++;
+                    }
+
+
+                    Y++;
+                }
+
+
+
+                Y = 0;
+                while (Y < this.BatchNormActivations[0][X].Length)
+                {
+
+                    if (X >= 0)
+                    {
+                        Z = 0;
+                        while (Z < this.Weights[X][Y].Length)
+                        {
+                            ZZ = 0;
+                            while (ZZ < Inputs.Length)
+                            {
+                                if(X == 0)
+                                {
+                                    Delta = this.BatchNormErrors[ZZ][X][Y] * Inputs[ZZ][Z];
+                                }
+                                else
+                                {
+                                    Delta = this.BatchNormErrors[ZZ][X][Y] * this.BatchNormActivations[ZZ][(X - 1)][Z];
+                                }
+                                
+                                //Delta = this.Errors[X][Y];
+
+                                if (TrainWeights)
+                                {
+
+                                    switch (OptimizerID)
+                                    {
+                                        case 0:
+
+                                            //this.PrevWeights[X][Y][Z] += Delta;
+                                            break;
+
+                                        case 1:
+                                            TempVal = (this.RMSPropConst * this.BatchNormOptimizerVals[ZZ][X][Y][Z][0]) + ((Math.Pow(Delta, 2) * (1 - this.RMSPropConst)));
+
+                                            if (TempVal < 0)
+                                            {
+                                                break;
+                                            }
+
+                                            this.BatchNormOptimizerVals[ZZ][X][Y][Z][0] = TempVal;
+                                            RMSPropDelta = this.LearningRate * Delta / Math.Sqrt(TempVal + 0.000000000000000000001);
+                                            Delta = RMSPropDelta;
+                                            break;
+
+                                        case 2:
+                                            this.BatchNormOptimizerVals[ZZ][X][Y][Z][0] = (this.B1 * this.BatchNormOptimizerVals[ZZ][X][Y][Z][0] + (1.0f - this.B1) * Delta);
+                                            this.BatchNormOptimizerVals[ZZ][X][Y][Z][1] = (this.B2 * this.BatchNormOptimizerVals[ZZ][X][Y][Z][1] + (1.0f - this.B2) * Math.Pow(Delta, 2));
+                                            ADAMDelta = (this.BatchNormOptimizerVals[ZZ][X][Y][Z][0] / (1.0f - this.B1)) / Math.Sqrt(((this.BatchNormOptimizerVals[ZZ][X][Y][Z][1] + 0.000000000000000000001) / (1.0f - this.B2)));
+                                            //this.Weights[X][Y][Z] = this.Weights[X][Y][Z] - this.LearningRate * ADAMDelta;
+                                            Delta = ADAMDelta;
+                                            break;
+                                    }
+
+                                }
+
+                                if (TrainWeights)
+                                {
+                                    this.BatchNormDeltas[X][Y][Z] += (Delta * this.LearningRate);
+                                }
+
+                                ZZ++;
+                            }
+
+
+                            Z++;
+                        }
+                    }
+
+                    Y++;
+                }
+
+                X--;
+            }
+
+            ApplyGradients();
+
+            //this.Weights = NewWeights;
+           
+        }
+
+        public void ApplyGradients()
+        {
+            int X = 0;
+            int Y = 0;
+            int Z = 0;
+
+            while(X < this.BatchNormDeltas.Length)
+            {
+                Y = 0;
+                while(Y < this.BatchNormDeltas[X].Length)
+                {
+                    Z = 0;
+                    while(Z < this.BatchNormDeltas[X][Y].Length)
+                    {
+                        this.Weights[X][Y][Z] -= (this.BatchNormDeltas[X][Y][Z]);
+
+                        Z++;
+                    }
+
+                    Y++;
+                }
+
+                X++;
+            }
         }
 
         public void BackPropagate(double[] Inputs,double[] Outputs, int OutputNormalizationMethod, bool TrainWeights, int OptimizerID, bool OnlyError = false, bool NormalizeOutputLayer = true, double AdditionalVal = 0, double AdditionalVal2 = 0)
@@ -625,54 +1722,39 @@ namespace MaddoxNET
             {
                 if (OnlyError == false)
                 {
-                    //L2 = (this.Activations[this.Activations.Count - 1][X] - Outputs[X]);
-                    if (Outputs[X] == 0)
+                    //L2 = this.Activations[this.Activations.Length - 1][X] - Outputs[X];
+                    //L2 = -((Outputs[X] / this.Activations[this.Activations.Length - 1][X]) - ((1.0f - Outputs[X]) / (1.0f - this.Activations[this.Activations.Length - 1][X])));
+                    //if (Outputs[X] == 1)
+                    //{
+                    //    L2 = -this.Activations[this.Activations.Length - 1][X] - 1.0f;
+                    //}
+                    //else
+                    //{
+                    //    L2 = -this.Activations[this.Activations.Length - 1][X];
+                    //}
+
+                    L2 =  (this.Activations[this.Activations.Length - 1][X]- Outputs[X]);
+
+                    if (OutputNormalizationMethod != 2)
                     {
-                        //L2 = (1.0f / (1.0f - this.Activations[this.Activations.Count - 1][X]));
-                        L2 = (this.Activations[this.Activations.Length - 1][X] - Outputs[X]);
-
-
-                        if (OutputNormalizationMethod != 2)
-                        {
-                            L2 *= this.ActivationFunctionDerivative(this.NetInputs[this.Activations.Length - 1][X], this.ActivationFunctions[this.Activations.Length - 1]);
-                        }
+                        L2 *= this.ActivationFunctionDerivative(this.NetInputs[this.Activations.Length - 1][X], this.ActivationFunctions[this.Activations.Length - 1]);
                     }
-                    else
-                    {
-                        //L2 = -1.0f / this.Activations[this.Activations.Count - 1][X];                        
-                        L2 = (this.Activations[this.Activations.Length - 1][X] - 1.0f);
-
-                        if (OutputNormalizationMethod != 2)
-                        {
-                            L2 *= this.ActivationFunctionDerivative(this.NetInputs[this.Activations.Length - 1][X], this.ActivationFunctions[this.Activations.Length - 1]);
-                        }
-                        //L2 = (this.Activations[this.Activations.Count - 1][X]);
-                    }
-
-
-
 
                     this.Errors[this.Errors.Length - 1][X] = L2;
                 }
                 else
                 {
-                    if(X < Outputs.Length)
-                    {
-                        L2 = Outputs[X];
-                    }
-                    else
-                    {
-                        L2 = 1;
-                    }
-                    
 
                     
-                    //L2 *= this.ActivationFunctionDerivative(AdditionalVal2, 1);
-                    L2 *= this.ActivationFunctionDerivative(this.NetInputs[this.Activations.Length - 1][X], this.ActivationFunctions[this.ActivationFunctions.Length - 1]);
 
+
+                    TempVal = (AdditionalVal - 1.0f);
+                    TempVal *= this.ActivationFunctionDerivative(AdditionalVal2, 1);
+                    //TempVal *= this.ActivationFunctionDerivative(AdditionalVal2, 1);
+                    TempVal *= this.ActivationFunctionDerivative(this.NetInputs[this.Activations.Length - 1][X], this.ActivationFunctions[this.ActivationFunctions.Length - 1]);                   
 
                     //this.Errors[this.Errors.Count - 1][X] = -(1.0f / (AdditionalVal)) * L2;
-                    this.Errors[this.Errors.Length - 1][X] = L2;
+                    this.Errors[this.Errors.Length - 1][X] = TempVal;
                 }
 
                 if(OutputNormalizationMethod == 2)
@@ -683,7 +1765,6 @@ namespace MaddoxNET
                 Y = 0;
                 while (Y < this.Weights[this.Weights.Length - 1][X].Length)
                 {
-                    //Delta = this.Errors[this.Errors.Count - 1][X] * this.Activations[this.Activations.Count - 2][Y];
                     Delta = this.Errors[this.Errors.Length - 1][X] * this.Activations[this.Activations.Length - 2][Y];
                     if(double.IsNaN(Delta))
                     {
@@ -703,14 +1784,14 @@ namespace MaddoxNET
                             break;
 
                         case 1:
-                            TempVal = (this.RMSPropConst * this.PrevWeights[this.PrevWeights.Length - 1][X][Y]) + ((Math.Pow(Delta, 2) * (1 - this.RMSPropConst)));
+                            //TempVal = (this.RMSPropConst * this.PrevWeights[this.PrevWeights.Length - 1][X][Y]) + ((Math.Pow(Delta, 2) * (1 - this.RMSPropConst)));
                             
                             if(TempVal < 0)
                             {
                                 break;
                             }
                             
-                            this.PrevWeights[this.PrevWeights.Length - 1][X][Y] = TempVal;
+                            //this.PrevWeights[this.PrevWeights.Length - 1][X][Y] = TempVal;
                             RMSPropDelta = this.LearningRate / Math.Sqrt(TempVal + 0.000000000000000000001) * Delta;
                             Delta = RMSPropDelta;
 
@@ -718,18 +1799,13 @@ namespace MaddoxNET
                             break;
 
                         case 2:
-                            this.PrevWeightsM[this.Errors.Length - 1][X][Y] = (this.B1 * this.PrevWeightsM[this.Errors.Length - 1][X][Y] + (1.0f - this.B1) * Delta);
-                            this.PrevWeightsV[this.Errors.Length - 1][X][Y] = (this.B2 * this.PrevWeightsV[this.Errors.Length - 1][X][Y] + (1.0f - this.B2) * Math.Pow(Delta, 2));
-
-
-                            if((this.B2 * this.PrevWeightsV[this.Errors.Length - 1][X][Y] + (1.0f - this.B2) * Math.Pow(Delta, 2)) < 0)
-                            {
-                                break;
-                            }
-
-                            ADAMDelta = (this.PrevWeightsM[this.Errors.Length - 1][X][Y] / (1.0f - this.B1)) / Math.Sqrt(((this.PrevWeightsV[this.Errors.Length - 1][X][Y] + 0.000000000000000000001) / (1.0f-this.B2)));
-                            //this.Weights[this.Weights.Count - 1][X][Y] = this.Weights[this.Weights.Count - 1][X][Y] - this.LearningRate * ADAMDelta;
+                            this.OptimizerVals[this.Errors.Length - 1][X][Y][0] = (this.B1 * this.OptimizerVals[this.Errors.Length - 1][X][Y][0] + (1.0f - this.B1) * Delta);
+                            this.OptimizerVals[this.Errors.Length - 1][X][Y][1] = (this.B2 * this.OptimizerVals[this.Errors.Length - 1][X][Y][1] + (1.0f - this.B2) * Math.Pow(Delta, 2));
+                            
+                            ADAMDelta = (this.OptimizerVals[this.Errors.Length - 1][X][Y][0] / (1.0f - this.B1)) / (Math.Sqrt(this.OptimizerVals[this.Errors.Length - 1][X][Y][1] + 0.000000000000000000001) / (1.0f-this.B2));
+                            //this.Weights[this.Weights.Length - 1][X][Y] = this.Weights[this.Weights.Length - 1][X][Y] - this.LearningRate * ADAMDelta;
                             Delta = ADAMDelta;
+
                             break;
                     }
 
@@ -740,8 +1816,9 @@ namespace MaddoxNET
 
                     if(TrainWeights)
                     {
-                        this.WeightDeltas[this.Errors.Length - 1][X][Y] += Delta;
-                        this.PrevWeights[this.PrevWeights.Length - 1][X][Y] += Delta;
+                        this.Weights[this.Weights.Length - 1][X][Y] = this.Weights[this.Weights.Length - 1][X][Y] - (Delta * this.LearningRate);
+                        //this.WeightDeltas[this.Errors.Length - 1][X][Y] += Delta;
+                        //this.PrevWeights[this.PrevWeights.Length - 1][X][Y] += Delta;
                     }
                     
 
@@ -811,16 +1888,16 @@ namespace MaddoxNET
                                         break;
 
                                     case 1:
-                                        TempVal = (this.RMSPropConst * this.PrevWeights[X][Y][Z]) + (Math.Pow(Delta, 2) * (1 - this.RMSPropConst)); ;
-                                        this.PrevWeights[X][Y][Z] = TempVal;
+                                        //TempVal = (this.RMSPropConst * this.PrevWeights[X][Y][Z]) + (Math.Pow(Delta, 2) * (1 - this.RMSPropConst)); ;
+                                        //this.PrevWeights[X][Y][Z] = TempVal;
                                         RMSPropDelta = this.LearningRate / Math.Sqrt(TempVal + 0.000000000000000000001) * Delta;
                                         Delta = RMSPropDelta;
                                         break;
 
                                     case 2:
-                                        this.PrevWeightsM[X][Y][Z] = (this.B1 * this.PrevWeightsM[X][Y][Z] + (1.0f - this.B1) * Delta);
-                                        this.PrevWeightsV[X][Y][Z] = (this.B2 * this.PrevWeightsV[X][Y][Z] + (1.0f - this.B2) * Math.Pow(Delta, 2));
-                                        ADAMDelta = (this.PrevWeightsM[X][Y][Z] / (1.0f - this.B1)) / Math.Sqrt(((this.PrevWeightsV[X][Y][Z] + 0.000000000000000000001) / (1.0f - this.B2)));
+                                        this.OptimizerVals[X][Y][Z][0] = (this.B1 * this.OptimizerVals[X][Y][Z][0] + (1.0f - this.B1) * Delta);
+                                        this.OptimizerVals[X][Y][Z][1] = (this.B2 * this.OptimizerVals[X][Y][Z][1] + (1.0f - this.B2) * Math.Pow(Delta, 2));
+                                        ADAMDelta = (this.OptimizerVals[X][Y][Z][0] / (1.0f - this.B1)) / Math.Sqrt(((this.OptimizerVals[X][Y][Z][1] + 0.000000000000000000001) / (1.0f - this.B2)));
                                         //this.Weights[X][Y][Z] = this.Weights[X][Y][Z] - this.LearningRate * ADAMDelta;
                                         Delta = ADAMDelta;
                                         break;
@@ -830,8 +1907,10 @@ namespace MaddoxNET
 
                             if(TrainWeights)
                             {
-                                this.WeightDeltas[X][Y][Z] += Delta;
-                                this.PrevWeights[X][Y][Z] += Delta;
+                                this.Weights[X][Y][Z] = this.Weights[X][Y][Z] - (Delta * this.LearningRate);
+
+                                //this.WeightDeltas[X][Y][Z] += Delta;
+                                //this.PrevWeights[X][Y][Z] += Delta;
                             }
 
 
@@ -864,13 +1943,13 @@ namespace MaddoxNET
                     Z = 0;
                     while(Z < this.Weights[X][Y].Length)
                     {
-                        this.Weights[X][Y][Z] -= ((this.WeightDeltas[X][Y][Z] / BatchSize) * this.LearningRate);
+                        //this.Weights[X][Y][Z] -= ((this.WeightDeltas[X][Y][Z] / BatchSize) * this.LearningRate);
 
                         if(double.IsNaN(this.Weights[X][Y][Z]))
                         {
                             break;
                         }
-                        this.WeightDeltas[X][Y][Z] = 0;
+                        //this.WeightDeltas[X][Y][Z] = 0;
 
                         Z++;
                     }
@@ -1342,19 +2421,19 @@ namespace MaddoxNET
                     break;
                 //ELU
                 case 2:
-                    if (Input > 0)
+                    if (Input >= 0)
                     {
                         TempVal = Input;
                     }
                     else
                     {
-                        TempVal = (Math.Exp(Input) - 1.0);
+                        TempVal = this.ELUConst * (Math.Exp(Input) - 1.0);
                     }
 
                     break;
                 //ReLU
                 case 3:
-                    if (Input > 0)
+                    if (Input >= 0)
                     {
                         TempVal = Input;
                     }
@@ -1367,25 +2446,9 @@ namespace MaddoxNET
                     //TempVal = Math.Max(0, Input);
 
                     break;
-                //ELU
-                case 4:
-                        if (Input > 0)
-                        {
-                            TempVal =  Input;
-                        }
-                        else
-                        {
-                            TempVal = (Math.Pow(Math.E, Input) - 1);
-                        }
-                        
-                        if(double.IsNaN(TempVal))
-                        {
-                            break;
-                        }
-                    break;
                 //Swish
-                case 5:
-                    TempVal = Input * this.ActivationFunction(Input, 1);
+                case 4:
+                    TempVal = Input * this.ActivationFunction(SwishConst * Input, 1);
                     break;
                 case 9:
                     TempVal = Input;
@@ -1420,13 +2483,13 @@ namespace MaddoxNET
                     break;
                 //ELU
                 case 2:
-                    if (Input > 0)
+                    if (Input >= 0)
                     {
                         TempVal = 1;
                     }
                     else
                     {
-                        TempVal = Math.Exp(Input);
+                        TempVal = this.ELUConst * Math.Exp(Input);
                     }
 
                     break;
@@ -1445,20 +2508,10 @@ namespace MaddoxNET
                     break;
 
                 case 4:
+                    //Swish
+                    TempVal = this.ActivationFunction(SwishConst * Input, 1);
+                    TempVal = TempVal + (Input * TempVal) * (1 - TempVal);
 
-                    if(Input > 0)
-                    {
-                        TempVal = 1;
-                    }
-                    else
-                    {
-                        TempVal =Math.Pow(Math.E, Input);
-                    }
-
-                    break;
-                
-                case 5:
-                    TempVal = this.ActivationFunction(Input,1) * this.ActivationFunction(Input, 5) * (1 - this.ActivationFunction(Input, 1));
                     break;
                 case 9:
                     TempVal = Input;
