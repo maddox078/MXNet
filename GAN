@@ -56,11 +56,11 @@ namespace MaddoxNET
             //DCNNBatch[4] = 1;
 
             DNNBatch[0] = 1;
-            DNNBatch[1] = 0;
+            DNNBatch[1] = 1;
             //DNNBatch[2] = 0;
 
 
-            PoolingSchedule[0] = (2);
+            PoolingSchedule[0] = (1);
             PoolingSchedule[1] = (1);
             PoolingSchedule[2] = (1);
             PoolingSchedule[3] = (1);
@@ -97,11 +97,11 @@ namespace MaddoxNET
             //LayerCounts[1] = ((int)(500));
             LayerCounts[1] = (1);
 
-            ActivationFunctions = new int[3];
+            ActivationFunctions = new int[2];
             ActivationFunctions[0] = (GradientFunctionID);
-            ActivationFunctions[1] = (GradientFunctionID);
             //ActivationFunctions[1] = (GradientFunctionID);
-            ActivationFunctions[2] = 1;
+            //ActivationFunctions[1] = (GradientFunctionID);
+            ActivationFunctions[1] = 1;
 
             Discriminator = new CNN(LayerCounts,FilterList,DNNBatch,DCNNBatch,ActivationFunctions,DCActivationIDs, PoolingSchedule,StrideSchedule, ImageDim, 0.001,0.0,0);
 
@@ -131,7 +131,7 @@ namespace MaddoxNET
             //PoolingSchedule[4] = (1);
 
 
-            NeuronCount = 26;
+            NeuronCount = 24;
             X = 0;
             while(X < FilterList2.Length)
             {
@@ -145,7 +145,7 @@ namespace MaddoxNET
             //GradientFunctionID =2;
 
             LayerCounts = new int[2];
-            LayerCounts[0] = ((int)(100));
+            LayerCounts[0] = ((int)(50));
             //LayerCounts[1] = ((int)(100));
             //LayerCounts[2] = ((int)(1000));
             //LayerCounts[2] = ((int)(1000));
@@ -239,17 +239,21 @@ namespace MaddoxNET
             double[][] TempList2;
             double[] TempList1Hist;
             double[][] TempList2Hist;
+            double[] TempList1Hist2;
+            double[][] TempList2Hist2;
             double Z1;
             double U1;
             double U2;
 
             TempList2 = new double[this.Generator.Flatten3DVector(this.Generator.BatchNormAvg[0]).Length][];
             TempList2Hist = new double[this.Generator.Flatten3DVector(this.Generator.BatchNormAvg[0]).Length][];
+            TempList2Hist2 = new double[this.Generator.Flatten3DVector(this.Generator.BatchNormAvg[0]).Length][];
 
             while (X < this.Generator.Flatten3DVector(this.Generator.BatchNormAvg[0]).Length)
             {
                 TempList1 = new double[this.Generator.NeuralNetwork.BatchNormActivations[0][this.Generator.NeuralNetwork.BatchNormActivations[0].Length - 1].Length];
                 TempList1Hist = new double[this.Generator.NeuralNetwork.BatchNormActivations[0][this.Generator.NeuralNetwork.BatchNormActivations[0].Length - 1].Length];
+                TempList1Hist2 = new double[this.Generator.NeuralNetwork.BatchNormActivations[0][this.Generator.NeuralNetwork.BatchNormActivations[0].Length - 1].Length];
                 Y = 0;
                 while(Y < this.Generator.NeuralNetwork.BatchNormActivations[0][this.Generator.NeuralNetwork.BatchNormActivations[0].Length -1].Length)
                 {
@@ -259,19 +263,21 @@ namespace MaddoxNET
 
                     TempList1[Y] = Z1 * 0.1;
                     TempList1Hist[Y] = 0;
-                    //TempList1[Y] = 0.1;
+                    TempList1Hist2[Y] = 0;
 
                     Y++;
                 }
 
                 TempList2[X] = TempList1;
                 TempList2Hist[X] = TempList1Hist;
+                TempList2Hist2[X] = TempList1Hist2;
 
                 X++;
             }
 
             this.Generator.TransitionWeights = TempList2;
-            this.Generator.TransitionWeightsHist = TempList2Hist;
+            this.Generator.TransitionWeightsHist1 = TempList2Hist;
+            this.Generator.TransitionWeightsHist2 = TempList2Hist2;
         }
 
         public void FeedForwardGeneratorBatch(double[][] Inputs, bool PoolFeatures, int OutputNormalization = 9, bool NormalizeOutputs = true)
@@ -301,8 +307,8 @@ namespace MaddoxNET
             //this.Generator.DerivativeFeatureMaps = new double[Inputs.Length][][][];
             //this.Generator.PrePoolFeatureMaps = new double[Inputs.Length][][][];
             //this.Generator.MaxFeatureMaps = new double[Inputs.Length][][][][];
-
-            this.Generator.InitializeMV(Inputs.Length);
+            this.Generator.InitializeDeltas();
+            //this.Generator.InitializeMV(Inputs.Length);
             this.Generator.InitializeBatch(Inputs.Length);
 
             this.Generator.NeuralNetwork.ForwardPropagateBatch(Inputs);
@@ -505,20 +511,24 @@ namespace MaddoxNET
                         //NeuronGradients = this.Generator.ElementWiseMultiply(NeuronGradients, this.Generator.BatchNormDerivativeFeatureMaps[A][E]);
                         FilterGradients = this.Generator.Convolve(NeuronGradients,this.Generator.BatchNormFeatureMaps[A][E - 1], 1, false);
 
-                        BackpropErrors = this.Generator.DeConvolve(NeuronGradients, this.Generator.Filters[E - 1],this.Generator.PoolingSchedule[E], 1, (this.Generator.Filters[E][0].Length - 1) * this.Generator.PoolingSchedule[E - 1]);
+                        //BackpropErrors = this.Generator.DeConvolve(NeuronGradients, this.Generator.Filters[E - 1],this.Generator.PoolingSchedule[E], 1, (this.Generator.Filters[E][0].Length - 1) * this.Generator.PoolingSchedule[E - 1]);
+                        BackpropErrors = this.Generator.Convolve(NeuronGradients, this.Generator.Filters[E - 1], 1, true);
                     }
                     else
                     {
-                        NeuronGradients = this.Generator.ResolveAveragePooling(BackpropErrors, E);
+                        NeuronGradients = BackpropErrors;
+                        //NeuronGradients = this.Generator.ResolveAveragePooling(BackpropErrors, E);
                         //NeuronGradients = BackpropErrors;
 
                         if (E == 0)
                         {
                             LocalGradients = new double[1][][];
                             LocalGradients[0] = this.Generator.ExpandVector(this.Generator.NeuralNetwork.BatchNormActivations[A][this.Generator.NeuralNetwork.BatchNormActivations[A].Length-1]);
+                            //LocalGradients[0] = Inputs;
 
+                            //LocalGradients[0] = this.CropMap(LocalGradients[0], LocalGradients[0].Length - 2);
                             NeuronGradients = this.Generator.ElementWiseMultiply(NeuronGradients, this.Generator.BatchNormDerivativeFeatureMaps[A][E]);
-                            FilterGradients = this.Generator.Convolve(LocalGradients, NeuronGradients, 1, false);
+                            FilterGradients = this.Generator.Convolve(LocalGradients, NeuronGradients, 1, true);
 
                             //NeuronGradients = this.Generator.PadLayerMaps(NeuronGradients, (this.Generator.Filters[0][0].Length - 1) * 1);
 
@@ -529,7 +539,8 @@ namespace MaddoxNET
                             NeuronGradients = this.Generator.ElementWiseMultiply(NeuronGradients, this.Generator.BatchNormDerivativeFeatureMaps[A][E]);
                             FilterGradients = this.Generator.Convolve(this.Generator.BatchNormFeatureMaps[A][E - 1], NeuronGradients, 1, false);
 
-                            BackpropErrors = this.Generator.DeConvolve(NeuronGradients, this.Generator.Filters[E - 1], this.Generator.PoolingSchedule[E],1, (this.Generator.Filters[E][0].Length - 1) * this.Generator.PoolingSchedule[E - 1]);
+                            //BackpropErrors = this.Generator.DeConvolve(NeuronGradients, this.Generator.Filters[E - 1], this.Generator.PoolingSchedule[E],1, (this.Generator.Filters[E][0].Length - 1) * this.Generator.PoolingSchedule[E - 1]);
+                            BackpropErrors = this.Generator.Convolve(NeuronGradients, this.Generator.Filters[E - 1], 1, true);
                         }
 
                     }
@@ -602,9 +613,9 @@ namespace MaddoxNET
                                             break;
 
                                         case 2:
-                                            this.Generator.FiltersM[A][E][X][Y][Z] = (this.Generator.NeuralNetwork.B1 * this.Generator.FiltersM[A][E][X][Y][Z] + (1 - this.Generator.NeuralNetwork.B1) * FilterGradients[X][Y][Z]);
-                                            this.Generator.FiltersV[A][E][X][Y][Z] = (this.Generator.NeuralNetwork.B2 * this.Generator.FiltersV[A][E][X][Y][Z] + (1 - this.Generator.NeuralNetwork.B2) * Math.Pow(FilterGradients[X][Y][Z], 2));
-                                            ADAMDelta = (this.Generator.FiltersM[A][E][X][Y][Z] / (1.0f - this.Generator.NeuralNetwork.B1)) / Math.Sqrt((this.Generator.FiltersV[A][E][X][Y][Z] / (1.0f - this.Generator.NeuralNetwork.B2)) + 0.000000000000000000001);
+                                            this.Generator.FiltersM[A][E][X][Y][Z] = (this.Generator.NeuralNetwork.B1 * this.Generator.FiltersM[A][E][X][Y][Z] + (1.0 - this.Generator.NeuralNetwork.B1) * FilterGradients[X][Y][Z]);
+                                            this.Generator.FiltersV[A][E][X][Y][Z] = (this.Generator.NeuralNetwork.B2 * this.Generator.FiltersV[A][E][X][Y][Z] + (1.0 - this.Generator.NeuralNetwork.B2) * Math.Pow(FilterGradients[X][Y][Z], 2));
+                                            ADAMDelta = this.Generator.LearningRate * (this.Generator.FiltersM[A][E][X][Y][Z] / (1.0 - Math.Pow(this.Generator.NeuralNetwork.B1, this.Generator.GlobalIterator)) / (Math.Sqrt((this.Generator.FiltersV[A][E][X][Y][Z] / (1.0 - Math.Pow(this.Generator.NeuralNetwork.B2, this.Generator.GlobalIterator))) + 0.0000000000000001)));
                                             this.Generator.BatchNormDeltas[E][X][Y][Z] += ADAMDelta;
                                             //this.Generator.Filters[E][X][Y][Z] = this.Generator.Filters[E][X][Y][Z] - this.Generator.LearningRate * ADAMDelta;
                                             break;
@@ -694,10 +705,13 @@ namespace MaddoxNET
                             {
                                 NeuronIndex = (int)((X * Math.Pow(this.Generator.BatchNormErrors[B][0][X].Length, 2)) + (Y * this.Generator.BatchNormErrors[B][0][X].Length) + Z);
 
-                                Delta = TempList2[B][A];
-                                TempVal1 = (this.Generator.NeuralNetwork.RMSPropConst * this.Generator.TransitionWeightsHist[NeuronIndex][A]) + (Math.Pow(Delta, 2) * (1 - this.Generator.NeuralNetwork.RMSPropConst));
-                                this.Generator.TransitionWeightsHist[NeuronIndex][A] = TempVal1;
-                                RMSPropDelta = this.Generator.LearningRate * Delta / (Math.Sqrt(TempVal1 + 0.00000000000000001));
+                                Delta = TempList2[B][A] * this.Generator.NeuralNetwork.ActivationFunctionDerivative(this.Generator.NeuralNetwork.BatchNormNetInputs[B][this.Generator.NeuralNetwork.BatchNormActivations[B].Length - 1][A], this.Generator.NeuralNetwork.ActivationFunctions[this.Generator.NeuralNetwork.BatchNormActivations[B].Length - 1]);
+
+
+                                this.Generator.TransitionWeightsHist1[B][NeuronIndex] = (this.Generator.NeuralNetwork.B1 * this.Generator.TransitionWeightsHist1[B][NeuronIndex] + (1.0 - this.Generator.NeuralNetwork.B1) * Delta);
+                                this.Generator.TransitionWeightsHist2[B][NeuronIndex] = (this.Generator.NeuralNetwork.B2 * this.Generator.TransitionWeightsHist2[B][NeuronIndex] + (1.0 - this.Generator.NeuralNetwork.B2) * Math.Pow(Delta, 2));
+                                ADAMDelta = this.Generator.NeuralNetwork.LearningRate * (this.Generator.TransitionWeightsHist1[B][NeuronIndex] / (1.0 - Math.Pow(this.Generator.NeuralNetwork.B1, this.Generator.GlobalIterator)) / (Math.Sqrt((this.Generator.TransitionWeightsHist2[B][NeuronIndex] / (1.0 - Math.Pow(this.Generator.NeuralNetwork.B2, this.Generator.GlobalIterator))) + 0.0000000000000001)));
+
                                 //this.Generator.Filters[E][X][Y][Z] = this.Generator.Filters[E][X][Y][Z] - RMSPropDelta;
 
                                 this.Generator.TransitionWeights[NeuronIndex][A] -= (RMSPropDelta);
@@ -723,6 +737,41 @@ namespace MaddoxNET
             
             //NeuronGradients = this.PoolMaps(this.Errors[0]);-
             this.Generator.NeuralNetwork.BackPropagateBatchGenerator((Inputs), TempList2, OutputNormalization, TrainWeights, WeightOptimizerID, DiscriminatorActivation, DiscriminatorRawActivation, ErrorOnly, NormalizeOutputLayer);
+        }
+
+        public double[][] CropMap(double[][] Inputs, int NewMapDims)
+        {
+            double[] TempList1;
+            double[][] TempList2 = new double[NewMapDims][];
+            int X = 0;
+            int Y = 0;
+
+            Y = 0;
+            while (Y < NewMapDims)
+            {
+                TempList1 = new double[NewMapDims];
+                X = 0;
+                while (X < NewMapDims)
+                {
+                    if (Y >= Inputs.Length || X >= Inputs[Y].Length)
+                    {
+                        TempList1[X] = 0;
+                    }
+                    else
+                    {
+                        TempList1[X] = Inputs[Y][X];
+                    }
+
+
+                    X++;
+                }
+
+                TempList2[Y] = TempList1;
+
+                Y++;
+            }
+
+            return TempList2;
         }
 
         public void BackPropagateGenerator(double[] Inputs, double[][][] Outputs, bool PoolActivations, bool TrainWeights, int WeightOptimizerID, int FilterOptimizerID, bool ErrorOnly = false, int OutputNormalization = 9, bool NormalizeOutputLayer = true, bool TrainFilters = true, double DiscriminatorActivation = 0, double DiscriminatorRawActivation = 0)
@@ -1202,7 +1251,7 @@ namespace MaddoxNET
                     U1 = 1.0 - Rnd.NextDouble();
                     U2 = 1.0 - Rnd.NextDouble();
                     Z1 = Math.Sqrt(-2.0 * Math.Log(U1)) * Math.Cos(2 * Math.PI * U2);
-                    TempList[Y] = Z1 * 0.1;
+                    TempList[Y] = Z1 * 0.01;
 
                     Y++;
                 }
