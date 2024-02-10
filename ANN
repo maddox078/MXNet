@@ -30,24 +30,27 @@ namespace MaddoxNET
         public double [][] BatchNormPopStats = new double[0][];
         public double LearningRate = 0;
         public double Momentum = 0;
-        public double ReLUConst = 0.01;
+        public double ReLUConst = 0.02;
         public double RMSPropConst = 0.009;
         public double MeanSquaredError = 0;
         public double B1 = 0.5;
         public double B2 = 0.999;
         public double WeightClipFactor = 0.0001;
         public double SwishConst =1;
-        public double ELUConst = 0.99;
+        public double ELUConst = 0.7;
         public List<double> NormalizationConsts = new List<double>();
         public double[][] BatchNormAvg;
         public double[][] BatchNormVar;
         public double[][] BatchNormBeta;
         public double[][] BatchNormGamma;
         public double[][] BatchNormGammaMovingAvg;
+        public double[][] BatchNormGammaMovingVar;
         public double[][] BatchNormBetaMovingAvg;
+        public double[][] BatchNormBetaMovingVar;
+        public int GlobalIterator = 1;
 
 
-        public ANN_Perf(int[] LayerCounts, int[] ActivationFunctions, int[] BatchNormLayers, int LossFunction,double LearningRate,double MomentumFactor,int WeightInitializationID = 0,int BatchSize = 3)
+        public ANN_Perf(int[] LayerCounts, int[] ActivationFunctions, int[] BatchNormLayers, int LossFunction,double LearningRate,double MomentumFactor,int WeightInitializationID = 0,int BatchSize = 9)
         {
             int X = 0;
             int Y = 0;
@@ -86,6 +89,8 @@ namespace MaddoxNET
             double[][][] OptimizerTemp3;
             double[][][][] OptimizerTemp4;
             double[][] OptimizerTemp2;
+            double[] BatchGammaVar;
+            double[] BatchBetaVar;
             Random Rnd = new Random(System.Guid.NewGuid().GetHashCode());
             double U1 = Rnd.NextDouble();
             double U2 = Rnd.NextDouble();
@@ -114,6 +119,8 @@ namespace MaddoxNET
             this.BatchNormVar = new double[LayerCounts.Length][];
             this.BatchNormBetaMovingAvg = new double[LayerCounts.Length][];
             this.BatchNormGammaMovingAvg = new double[LayerCounts.Length][];
+            this.BatchNormBetaMovingVar = new double[LayerCounts.Length][];
+            this.BatchNormGammaMovingVar = new double[LayerCounts.Length][];
 
             this.ActivationFunctions = ActivationFunctions;
             this.LearningRate = LearningRate;
@@ -134,6 +141,8 @@ namespace MaddoxNET
                 BatchBeta = new double[LayerCounts[X]];
                 BatchGammaMoving = new double[LayerCounts[X]];
                 BatchBetaMoving = new double[LayerCounts[X]];
+                BatchGammaVar = new double[LayerCounts[X]];
+                BatchBetaVar = new double[LayerCounts[X]];
 
                 Rnd = new Random(System.Guid.NewGuid().GetHashCode());
                 Y = 0;
@@ -170,6 +179,8 @@ namespace MaddoxNET
                     BatchBeta[Y] = 0;
                     BatchGammaMoving[Y] =0;
                     BatchBetaMoving[Y] = 0;
+                    BatchGammaVar[Y] = 0;
+                    BatchBetaVar[Y] = 0;
 
 
                     Y++;
@@ -186,6 +197,8 @@ namespace MaddoxNET
                 this.BatchNormBeta[X] = BatchBeta;
                 this.BatchNormGammaMovingAvg[X] = BatchGammaMoving;
                 this.BatchNormBetaMovingAvg[X] = BatchBetaMoving;
+                this.BatchNormGammaMovingVar[X] = BatchGammaVar;
+                this.BatchNormBetaMovingVar[X] = BatchGammaVar;
 
                 this.BatchNormDeltas[X] = BatchDelta2;
 
@@ -426,8 +439,8 @@ namespace MaddoxNET
                 {
                     TempList1[Y] = (Inputs[X][Y] - Mean) / Variance;
 
-                    this.BatchNormAvg[LayerID][Y] = (1 - 0.99) * this.BatchNormAvg[LayerID][Y] + (0.9 * Mean);
-                    this.BatchNormVar[LayerID][Y] = (1 - 0.99) * Math.Pow(this.BatchNormVar[LayerID][Y], 2) + (0.9 * Math.Pow(Variance, 2));
+                    this.BatchNormAvg[LayerID][Y] = (1 - 0.99) * this.BatchNormAvg[LayerID][Y] + (0.99 * Mean);
+                    this.BatchNormVar[LayerID][Y] = (1 - 0.99) * Math.Pow(this.BatchNormVar[LayerID][Y], 2) + (0.99 * Math.Pow(Variance, 2));
 
                     Y++;
                 }
@@ -739,7 +752,7 @@ namespace MaddoxNET
                 X++;
             }
 
-            this.BatchNormOptimizerVals = new double[BatchSize][][][][];
+            //this.BatchNormOptimizerVals = new double[BatchSize][][][][];
             //this.BatchNormDeltas = new double[BatchSize][][];
 
             A = 0;
@@ -779,7 +792,8 @@ namespace MaddoxNET
                     X++;
                 }
 
-                this.BatchNormOptimizerVals[A] = TempListO4;
+
+                //this.BatchNormOptimizerVals[A] = TempListO4;
 
                 A++;
             }
@@ -1077,14 +1091,14 @@ namespace MaddoxNET
 
                     if (Outputs[Y][X] == 1)
                     {
-                        //L2 = -1.0 / this.BatchNormActivations[Y][this.Activations.Length - 1][X];
-                        L2 = this.BatchNormActivations[Y][this.Activations.Length - 1][X] - 1.0;
+                        L2 = -1.0 / this.BatchNormActivations[Y][this.Activations.Length - 1][X];
+                        //L2 = this.BatchNormActivations[Y][this.Activations.Length - 1][X] - 1.0;
                     }
                     else
                     {
 
-                        //L2 = -1.0 / (1.0 - this.BatchNormActivations[Y][this.Activations.Length - 1][X]);
-                        L2 = this.BatchNormActivations[Y][this.Activations.Length - 1][X];
+                        L2 = -1.0 / (1.0 - this.BatchNormActivations[Y][this.Activations.Length - 1][X]);
+                        //L2 = this.BatchNormActivations[Y][this.Activations.Length - 1][X];
                     }
 
                     if (OutputNormalizationMethod != 2)
@@ -1148,12 +1162,10 @@ namespace MaddoxNET
                                 break;
 
                             case 2:
-                                this.BatchNormOptimizerVals[Y][this.Errors.Length - 1][X][Z][0] = (this.B1 * this.BatchNormOptimizerVals[Y][this.Errors.Length - 1][X][Z][0] + (1.0f - this.B1) * Delta);
-                                this.BatchNormOptimizerVals[Y][this.Errors.Length - 1][X][Z][1] = (this.B2 * this.BatchNormOptimizerVals[Y][this.Errors.Length - 1][X][Z][1] + (1.0f - this.B2) * Math.Pow(Delta, 2));
-
-                                ADAMDelta = (this.BatchNormOptimizerVals[Y][this.Errors.Length - 1][X][Z][0] / (1.0f - this.B1)) / (Math.Sqrt(this.BatchNormOptimizerVals[Y][this.Errors.Length - 1][X][Z][1] + 0.000000000000000000001) / (1.0f - this.B2));
-                                //this.Weights[this.Weights.Length - 1][X][Y] = this.Weights[this.Weights.Length - 1][X][Y] - this.LearningRate * ADAMDelta;
-                                Delta = ADAMDelta;
+                                this.BatchNormOptimizerVals[Y][this.Errors.Length - 1][X][Z][0] = (this.B1 * this.BatchNormOptimizerVals[Y][this.Errors.Length - 1][X][Z][0] + (1.0 - this.B1) * Delta);
+                                this.BatchNormOptimizerVals[Y][this.Errors.Length - 1][X][Z][1] = (this.B2 * this.BatchNormOptimizerVals[Y][this.Errors.Length - 1][X][Z][1] + (1.0 - this.B2) * Math.Pow(Delta, 2));
+                                ADAMDelta = this.LearningRate * (this.BatchNormOptimizerVals[Y][this.Errors.Length - 1][X][Z][0] / (1.0 - Math.Pow(this.B1, this.GlobalIterator)) / (Math.Sqrt((this.BatchNormOptimizerVals[Y][this.Errors.Length - 1][X][Z][1] / (1.0 - Math.Pow(this.B2, this.GlobalIterator))) + 0.0000000000000001)));
+                                Delta = ADAMDelta ;
 
                                 break;
                         }
@@ -1161,7 +1173,7 @@ namespace MaddoxNET
 
                         if (TrainWeights)
                         {
-                            this.BatchNormDeltas[this.Weights.Length - 1][X][Z] += (Delta * this.LearningRate);
+                            this.BatchNormDeltas[this.Weights.Length - 1][X][Z] += (Delta);
                         }
 
 
@@ -1272,7 +1284,7 @@ namespace MaddoxNET
                                         case 2:
                                             this.BatchNormOptimizerVals[ZZ][X][Y][Z][0] = (this.B1 * this.BatchNormOptimizerVals[ZZ][X][Y][Z][0] + (1.0f - this.B1) * Delta);
                                             this.BatchNormOptimizerVals[ZZ][X][Y][Z][1] = (this.B2 * this.BatchNormOptimizerVals[ZZ][X][Y][Z][1] + (1.0f - this.B2) * Math.Pow(Delta, 2));
-                                            ADAMDelta = (this.BatchNormOptimizerVals[ZZ][X][Y][Z][0] / (1.0f - this.B1)) / Math.Sqrt(((this.BatchNormOptimizerVals[ZZ][X][Y][Z][1] + 0.000000000000000000001) / (1.0f - this.B2)));
+                                            ADAMDelta = this.LearningRate * (this.BatchNormOptimizerVals[ZZ][X][Y][Z][0] / (1.0f - this.B1)) / Math.Sqrt(((this.BatchNormOptimizerVals[ZZ][X][Y][Z][1] + 0.000000000000000000001) / (1.0f - this.B2)));
                                             //this.Weights[X][Y][Z] = this.Weights[X][Y][Z] - this.LearningRate * ADAMDelta;
                                             Delta = ADAMDelta;
                                             break;
@@ -1282,7 +1294,7 @@ namespace MaddoxNET
 
                                 if (TrainWeights)
                                 {
-                                    this.BatchNormDeltas[X][Y][Z] += (Delta * this.LearningRate);
+                                    this.BatchNormDeltas[X][Y][Z] += (Delta);
                                 }
 
                                 ZZ++;
@@ -1656,7 +1668,13 @@ namespace MaddoxNET
                 X--;
             }
 
-            ApplyGradients();
+            this.GlobalIterator++;
+
+            if(TrainWeights)
+            {
+                ApplyGradients();
+            }
+            
 
             //this.Weights = NewWeights;
            
