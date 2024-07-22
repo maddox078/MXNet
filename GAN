@@ -1,229 +1,385 @@
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Linq;
+using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms.VisualStyles;
 
-namespace MaddoxNET
+namespace MaddoxNet2
 {
     public class GAN
     {
-        public CNN Generator;
         public CNN Discriminator;
-        public int Convolutions =1;
-        public int KernelSize = 1;
-        public int ImageDim = 0;
-        public int DataSetSize = 0;
-        public Random Rnd = new Random(System.Guid.NewGuid().GetHashCode());
+        public CNN Generator;
+        public double[] CurrentSeed;
+        //public int IterationCounter = 0;
 
-        public GAN(int ImageDimCount,double[][][][] FilterList, double[][][][] FilterList2, int ConvolutionCount,int KernelSizeInput, double LearningRate,double MomentumFactor)
+        public GAN()
         {
-            int[] LayerCounts = new int[3];
-            int[] ActivationFunctions = new int[3];
-            int[] PoolingSchedule = new int[4];
-            int[] StrideSchedule = new int[4];
-            int[] DCActivationIDs = new int[4];
-            int[] GCActivationIDs = new int[4];
-            int[] GNNBatch = new int[3];
-            int[] GCNNBatch = new int[5];
-            int[] DNNBatch = new int[3];
-            int[] DCNNBatch = new int[4];
-            int X = 0;
-            int GradientFunctionID =2;
-            double NeuronCount = 0;
+            int[] ActivationIDs;
+            int[] PoolingSched;
+            int[] FilterCounts;
+            int[] ANNLayerCnts;
+            int[] ANNActivationIDs;
+            int[] FilterDims;
+            int A = 0;
+            double ImageDims = 0;
+            //int FilterDims = 5;
 
-            this.ImageDim = ImageDimCount;
-            this.KernelSize = KernelSizeInput;
-            this.Convolutions = ConvolutionCount;
+            ActivationIDs = new int[5];
+            ActivationIDs[0] = 2;
+            ActivationIDs[1] = 2;
+            ActivationIDs[2] = 2;
+            ActivationIDs[3] = 2;
+            ActivationIDs[4] = 2;
+            //ActivationIDs[5] = 2;
 
-            GNNBatch[0] = 0;
-            GNNBatch[1] = 1;
-            //GNNBatch[2] = 1;
+            PoolingSched = new int[5];
+            PoolingSched[0] = 2;
+            PoolingSched[1] = 2;
+            PoolingSched[2] = 2;
+            PoolingSched[3] = 2;
+            PoolingSched[4] = 1;
+            //PoolingSched[5] = 1;
 
-            GCNNBatch[0] = 1;
-            GCNNBatch[1] = 1;
-            GCNNBatch[2] = 1;
-            GCNNBatch[3] = 1;
-            GCNNBatch[4] = 0;
+            FilterCounts = new int[5];
+            FilterCounts[0] = 20;
+            FilterCounts[1] = 40;
+            FilterCounts[2] = 50;
+            FilterCounts[3] = 60;
+            FilterCounts[4] = 70;
+            //FilterCounts[5] = 70;
+
+            FilterDims = new int[5];
+            FilterDims[0] = 4;
+            FilterDims[1] = 4;
+            FilterDims[2] = 4;
+            FilterDims[3] = 4;
+            FilterDims[4] = 4;
+            //FilterDims[5] = 4;
+
+            ANNActivationIDs = new int[1];
+            ANNActivationIDs[0] = 1;
+            //ANNActivationIDs[1] = 1;
+            //ANNActivationIDs[2] = 1;
+
+            ImageDims = 80;
+            A = 0;
+            while (A < FilterCounts.Length)
+            {
+                ImageDims = ImageDims / PoolingSched[A];
+
+                A++;
+            }
+
+            ImageDims = Math.Ceiling(ImageDims);
             
-
-            DCNNBatch[0] = 0;
-            DCNNBatch[1] = 1;
-            DCNNBatch[2] = 1;
-            DCNNBatch[3] = 1;
-            //DCNNBatch[4] = 1;
-
-            DNNBatch[0] = 1;
-            DNNBatch[1] = 1;
-            //DNNBatch[2] = 0;
+            ANNLayerCnts = new int[1];
+            //ANNLayerCnts[0] = (int)(ImageDims * ImageDims * FilterCounts[FilterCounts.Length - 1]);
+            ANNLayerCnts[0] = (int)(1);
+            //ANNLayerCnts[2] = 1;
 
 
-            PoolingSchedule[0] = (1);
-            PoolingSchedule[1] = (1);
-            PoolingSchedule[2] = (1);
-            PoolingSchedule[3] = (1);
-            //PoolingSchedule[4] = (1);
+            Discriminator = new CNN(ActivationIDs, PoolingSched, FilterCounts, FilterDims, 80, ANNLayerCnts, ANNActivationIDs, 0.001);
 
-            DCActivationIDs[0] = GradientFunctionID;
-            DCActivationIDs[1] = GradientFunctionID;
-            DCActivationIDs[2] = GradientFunctionID;
-            DCActivationIDs[3] = GradientFunctionID;
-            //DCActivationIDs[4] = GradientFunctionID;
+            ActivationIDs = new int[4];
+            ActivationIDs[0] = 2;
+            ActivationIDs[1] = 2;
+            ActivationIDs[2] = 2;
+            ActivationIDs[3] = 2;
 
-            StrideSchedule[0] = (1);
-            StrideSchedule[1] = (1);
-            StrideSchedule[2] = (1);
-            StrideSchedule[3] = (1);
-            //StrideSchedule[4] = (1);
+            PoolingSched = new int[4];
+            PoolingSched[0] = 2;
+            PoolingSched[1] = 2;
+            PoolingSched[2] = 2;
+            PoolingSched[3] = 2;
 
-            //DataSetSize = Math.Pow(ImageDim-2,2) * ;
-            NeuronCount = ImageDim;
-            X = 0;
-            while(X < FilterList.Length)
+            FilterCounts = new int[3];
+            FilterCounts[0] = 5;
+            FilterCounts[1] = 5;
+            FilterCounts[2] = 1;
+
+            ANNActivationIDs = new int[3];
+            ANNActivationIDs[0] = 3;
+            ANNActivationIDs[1] = 3;
+            ANNActivationIDs[2] = 1;
+
+            FilterDims = new int[4];
+            FilterDims[0] = 3;
+            FilterDims[1] = 4;
+            FilterDims[2] = 4;
+            FilterDims[3] = 4;
+
+
+            ImageDims = 32;
+            A = 0;
+            while (A < FilterCounts.Length)
             {
-                NeuronCount = ((NeuronCount - (FilterList[X][0][0].Length - 1)) / (PoolingSchedule[X] * StrideSchedule[X]));
+                ImageDims = (ImageDims + FilterDims[A] - 1) * PoolingSched[A];
 
-                X++;
+                A++;
             }
 
-            NeuronCount = Math.Ceiling(NeuronCount);
+            ImageDims = Math.Ceiling(ImageDims);
 
-            LayerCounts = new int[2];
+            ANNLayerCnts = new int[3];
+            ANNLayerCnts[0] = (int)(1000);
+            ANNLayerCnts[1] = (int)(ANNLayerCnts[0] * 1.5);
+            ANNLayerCnts[2] = (int)(38 * 38 * 1);
 
-            LayerCounts[0] = ((int)(NeuronCount * NeuronCount * FilterList[FilterList.Length - 1].Length));
-            //LayerCounts[1] = ((int)(100));
-            //LayerCounts[1] = ((int)(500));
-            LayerCounts[1] = (1);
-
-            ActivationFunctions = new int[2];
-            ActivationFunctions[0] = (GradientFunctionID);
-            //ActivationFunctions[1] = (GradientFunctionID);
-            //ActivationFunctions[1] = (GradientFunctionID);
-            ActivationFunctions[1] = 1;
-
-            Discriminator = new CNN(LayerCounts,FilterList,DNNBatch,DCNNBatch,ActivationFunctions,DCActivationIDs, PoolingSchedule,StrideSchedule, ImageDim, 0.001,0.0,0);
-
-            ////
-            ///
-
-            GCActivationIDs = new int[4];
-            GCActivationIDs[0] = GradientFunctionID;
-            GCActivationIDs[1] = GradientFunctionID;
-            GCActivationIDs[2] = GradientFunctionID;
-            //GCActivationIDs[3] = GradientFunctionID;
-            GCActivationIDs[3] = 0;
-
-            StrideSchedule = new int[4];
-            StrideSchedule[0] = (1);
-            StrideSchedule[1] = (1);
-            StrideSchedule[2] = (1);
-            StrideSchedule[3] = (1);
-            //StrideSchedule[4] = (1);
-            //StrideSchedule[4] = (1);
-
-            PoolingSchedule = new int[4];
-            PoolingSchedule[0] = (1);            
-            PoolingSchedule[1] = (1);
-            PoolingSchedule[2] = (1);
-            PoolingSchedule[3] = (1);
-            //PoolingSchedule[4] = (1);
-
-
-            NeuronCount = 24;
-            X = 0;
-            while(X < FilterList2.Length)
-            {
-                NeuronCount = ((NeuronCount + (FilterList2[X][0].Length - 1)) * (PoolingSchedule[X] * StrideSchedule[X]));
-
-                X++;
-            }
-
-            NeuronCount = Math.Ceiling(NeuronCount);
-
-            //GradientFunctionID =2;
-
-            LayerCounts = new int[2];
-            LayerCounts[0] = ((int)(50));
-            //LayerCounts[1] = ((int)(100));
-            //LayerCounts[2] = ((int)(1000));
-            //LayerCounts[2] = ((int)(1000));
-            LayerCounts[1] = ((int)(NeuronCount * NeuronCount * FilterList2[0].Length));
-
-            ActivationFunctions = new int[2];
-            ActivationFunctions[0] = (GradientFunctionID);
-            ActivationFunctions[1] = (GradientFunctionID);
-            //ActivationFunctions[2] = (GradientFunctionID);
-            //ActivationFunctions[3] = (GradientFunctionID);
-
-
-
-            Generator = new CNN(LayerCounts,FilterList2,GNNBatch,GCNNBatch,ActivationFunctions,GCActivationIDs, PoolingSchedule,StrideSchedule, ImageDim, 0.001,0.0,0);
-            Generator.InitializeGenerator();
+            Generator = new CNN(ActivationIDs, PoolingSched, FilterCounts, FilterDims, 48, ANNLayerCnts, ANNActivationIDs, 0.0015);
         }
 
-        public void FeedForwardGenerator(double[] Inputs, bool PoolFeatures, int OutputNormalization = 9, bool NormalizeOutputs = true)
+        public void GeneratorForwardPropagate(double[] Inputs)
         {
-            double[][][] FinalInputs;
-            double[][][] SubInputs;
-            double[][][] SubInputs2;
-            int X = 0;
-            int Y = 0;
-            int Z = 0;
-            int ZZ = 0;
+            double[][][] TempList;
+            int A = 0;
+            int B = 0;
+            double TempVal = 0;
 
-            this.Generator.FeatureMaps = new double[this.Generator.Filters.Length][][][];
-            this.Generator.RawFeatureMaps = new double[this.Generator.Filters.Length][][][];
-            this.Generator.DerivativeFeatureMaps = new double[this.Generator.Filters.Length][][][];
-            this.Generator.PrePoolFeatureMaps = new double[this.Generator.Filters.Length][][][];
-            this.Generator.MaxFeatureMaps = new double[this.Generator.Filters.Length][][][][];
+            this.CurrentSeed = Inputs;
+            this.Generator.NeuralNet.NetInputs[0] = Inputs;
+            //this.Generator.NeuralNet.ForwardPropagate(Inputs);
 
-            this.Generator.NeuralNetwork.ForwardPropagate(Inputs, OutputNormalization, NormalizeOutputs);
-
-            SubInputs = this.Generator.ReshapeTensor(this.Generator.NeuralNetwork.Activations[this.Generator.NeuralNetwork.Activations.Length - 1], this.Generator.Filters[0].Length);
-
-            X = 0;
-            while (X < this.Generator.Filters.Length)
+            A = 0;
+            while (A < this.Generator.TransitionWeights.Length)
             {
-                if (X > 0)
+                TempVal = 0;
+
+                B = 0;
+                while (B < this.Generator.TransitionWeights[A].Length)
                 {
-                    SubInputs = new double[this.Generator.FeatureMaps[X - 1].Length][][];
-                    SubInputs = this.Generator.FeatureMaps[X - 1];
+                    TempVal += (this.Generator.TransitionWeights[A][B] * Inputs[B]);
+
+                    B++;
                 }
 
-                SubInputs = this.Generator.Convolve(SubInputs, this.Generator.Filters[X], this.Generator.StrideSchedule[X], false);
+                this.Generator.TransitionValues[A] = TempVal;
 
-                this.Generator.DerivativeFeatureMaps[X] = this.Generator.ActivateDerivativeConvolutions(SubInputs, this.Generator.CNNActivationFunctionIDs[X]);
-                this.Generator.RawFeatureMaps[X] = SubInputs;
+                A++;
+            }
 
-                if (X >= 0)
+            TempList = this.ReshapeTensor(this.Generator.TransitionValues, this.Generator.Filters[0].Length);
+
+            A = 0;
+            while(A < this.Generator.Filters.Length)
+            {
+                if(A > 0)
                 {
-                    SubInputs = this.Generator.ActivateConvolutions(this.Generator.RawFeatureMaps[X], this.Generator.CNNActivationFunctionIDs[X]);
+                    TempList = this.Generator.FeatureMaps[A - 1];
+                    
+                    
                 }
 
-                if (PoolFeatures)
-                {
-                    SubInputs = this.Generator.PoolLayer(SubInputs, X,true);
-                }
+                //TempList = this.Generator.DeConvolve(TempList, this.Generator.Filters[A], A, (this.Generator.Filters[A][0].Length - 1) * (this.Generator.PoolingSchedule[Math.Max(0, A - 1)]), false);
+                TempList = this.Generator.TransposedConvolution3(TempList, this.Generator.Filters[A], A,TempList[0].Length * this.Generator.PoolingSchedule[A],this.Generator.Filters[A].Length,false, false);
+                this.Generator.DerivativeFeatureMaps[A] = this.Generator.ActivateDerivativeConvolutions(TempList, this.Generator.ActivationFunctions[A]);
+                this.Generator.NetFeatureMaps[A] = TempList;
+                this.Generator.FeatureMaps[A] = this.Generator.ActivateConvolutions(TempList, this.Generator.ActivationFunctions[A]);
 
-
-                this.Generator.FeatureMaps[X] = SubInputs;
-
-                X++;
+                A++;
             }
         }
 
-        public double[] ReshapeTensorAssistant(double[][] Input,int BatchID)
+        public void GeneratorBackPropagate(double[] Inputs,int OptimizerID,double DiscriminatorActivation)
         {
-            double[] RetVal;
-            int X = 0;
+            int A = 0;
+            int B = 0;
+            int C = 0;
+            int D = 0;
+            int NeuronIndex;
+            double[][][] LocalGradients;
+            double[][][] NeuronGradients;
+            double[][][] FilterGradients;
+            double[][][] BackPropErrors = new double[0][][];
+            double[] TempList;
+            double[] FlattenedVals;
+            double TempVal;
 
-            RetVal = new double[Input.Length];
+            this.GeneratorForwardPropagate(Inputs);
 
-            while (X < Input.Length)
+            A = this.Generator.Filters.Length - 1;
+            while(A >= 0)
             {
-                RetVal[X] = Input[X][BatchID];
+                if(A == this.Generator.Filters.Length - 1)
+                {
+                    //NeuronGradients = this.Generator.TransposedConvolution3(this.Discriminator.ErrorMaps[0], this.Generator.Filters[A], 1, this.Generator.FeatureMaps[A][0].Length, this.Generator.FeatureMaps[A].Length, true, true);
+
+                    NeuronGradients = this.Generator.CreateEmptyMapList(this.Generator.DerivativeFeatureMaps[this.Generator.DerivativeFeatureMaps.Length - 1][0].Length, this.Generator.DerivativeFeatureMaps[this.Generator.DerivativeFeatureMaps.Length - 1].Length,-1.0/DiscriminatorActivation);
+
+                    NeuronGradients = this.MultiplyMapsByScalar(NeuronGradients, this.Discriminator.NeuralNet.Derivatives[this.Discriminator.NeuralNet.Derivatives.Length - 1][0]);
+                    NeuronGradients = this.Generator.ElementWiseMultiply(NeuronGradients, this.Generator.DerivativeFeatureMaps[A]);
+
+
+                    //NeuronGradients = this.MultiplyMapsByScalar(NeuronGradients, -(1.0 - (DiscriminatorActivation)));
+                    //NeuronGradients = this.MultiplyMapsByScalar(NeuronGradients, -1.0 / (DiscriminatorActivation));
+                    //NeuronGradients = this.MultiplyMapsByScalar(NeuronGradients, -this.Discriminator.NeuralNet.Derivatives[this.Discriminator.NeuralNet.Derivatives.Length - 1][0]);
+
+                    //NeuronGradients = this.MultiplyMapsByScalar(this.Generator.DerivativeFeatureMaps[this.Generator.DerivativeFeatureMaps.Length - 1], -1.0/DiscriminatorActivation);
+                    //NeuronGradients = this.Generator.ElementWiseMultiply(NeuronGradients, this.Generator.DerivativeFeatureMaps[this.Generator.DerivativeFeatureMaps.Length - 1]);
+                    FilterGradients = this.Generator.TransposedConvolution3(this.Generator.FeatureMaps[A-1], NeuronGradients,A, this.Generator.Filters[A][0].Length, this.Generator.Filters[A].Length,true, true);
+                    //FilterGradients = this.MultiplyMapsByScalar(FilterGradients, -1.0 / DiscriminatorActivation);
+                    BackPropErrors = this.Generator.Convolve(NeuronGradients,this.Generator.Filters[A - 1],A, this.Generator.PoolingSchedule[A],0, true);
+                }
+                else
+                {
+                    NeuronGradients = BackPropErrors;
+
+                    if (A == 0)
+                    {
+                        LocalGradients = new double[1][][];
+                        LocalGradients = this.ReshapeTensor(this.Generator.TransitionValues, this.Generator.Filters[0].Length);
+                        NeuronGradients = this.Generator.ElementWiseMultiply(NeuronGradients, this.Generator.DerivativeFeatureMaps[A]);
+                        FilterGradients = this.Generator.TransposedConvolution3((LocalGradients), NeuronGradients,  A, this.Generator.Filters[A][0].Length, this.Generator.Filters[A].Length,true, true);
+                        //NeuronGradients = this.PadLayerMaps(NeuronGradients,1,0.5);
+                    }
+                    else
+                    {
+                        NeuronGradients = this.Generator.ElementWiseMultiply(NeuronGradients, this.Generator.DerivativeFeatureMaps[A]);
+                        FilterGradients = this.Generator.TransposedConvolution3(this.Generator.FeatureMaps[A - 1], NeuronGradients, A, this.Generator.Filters[A][0].Length, this.Generator.Filters[A].Length,true, true);
+                        BackPropErrors = this.Generator.Convolve(NeuronGradients, this.Generator.Filters[A - 1], A,this.Generator.PoolingSchedule[A],0, true);
+                    }
+                }
+
+                this.Generator.ErrorMaps[A] = NeuronGradients;
+
+                B = 0;
+                while(B < this.Generator.Filters[A].Length)
+                {
+                    C = 0;
+                    while(C < this.Generator.Filters[A][B].Length)
+                    {
+                        D = 0;
+                        while(D < this.Generator.Filters[A][B][C].Length)
+                        {
+                            switch(OptimizerID)
+                            {
+                                case 0:
+
+                                    break;
+
+                                case 1:                                   
+                                    this.Generator.LastFilters[A][B][C][D] = (this.Generator.NeuralNet.RMSConst * this.Generator.LastFilters[A][B][C][D] + (1.0 - this.Generator.NeuralNet.RMSConst) * (Math.Pow(FilterGradients[B][C][D], 2)));
+                                    TempVal = (this.Generator.NeuralNet.LearningRate * FilterGradients[B][C][D] / Math.Sqrt(this.Generator.LastFilters[A][B][C][D] + 0.000000001));
+                                    this.Generator.Filters[A][B][C][D] += TempVal;
+
+                                    this.Generator.DeltaMaps[A][B][C][D] = TempVal;
+
+                                    break;
+                                case 2:
+                                    this.Generator.LastFilters[A][B][C][D] = (this.Generator.NeuralNet.B1 * this.Generator.LastFilters[A][B][C][D] + (1.0 - this.Generator.NeuralNet.B1) * FilterGradients[B][C][D]);/// (1.0 - Math.Pow(this.Generator.NeuralNet.B1, this.Generator.IterationCounter));
+                                    this.Generator.LastFilters2[A][B][C][D] = (this.Generator.NeuralNet.B2 * this.Generator.LastFilters2[A][B][C][D] + (1.0 - this.Generator.NeuralNet.B2) * Math.Pow(FilterGradients[B][C][D], 2));/// (1.0 - Math.Pow(this.Generator.NeuralNet.B2, this.Generator.IterationCounter));
+                                    TempVal = (this.Generator.NeuralNet.LearningRate * this.Generator.LastFilters[A][B][C][D] / (Math.Sqrt(this.Generator.LastFilters2[A][B][C][D]) + 0.00000000001));
+                                    this.Generator.Filters[A][B][C][D] -= TempVal;
+
+                                    this.Generator.DeltaMaps[A][B][C][D] = TempVal;
+
+                                    break;
+                            }
+
+                            D++;
+                        }
+
+                        C++;
+                    }
+
+                    B++;
+                }
+
+                A--;
+            }
+
+            TempList = new double[this.Generator.NeuralNet.Activations[this.Generator.NeuralNet.Activations.Length - 1].Length];
+            FlattenedVals = this.Flatten3DVector(this.Generator.ErrorMaps[0]);
+
+            //A = 0;
+            //while (A < this.Generator.NeuralNet.Activations[this.Generator.NeuralNet.Activations.Length - 1].Length)
+            //{
+            //    TempVal = 0;
+            //    B = 0;
+            //    while (B < FlattenedVals.Length)
+            //    {
+            //        TempVal += (FlattenedVals[B] * this.Generator.TransitionWeights[A][B]);
+
+            //        B++;
+            //    }
+
+            //    TempList[A] = TempVal;
+
+            //    A++;
+            //}
+
+
+                A = 0;
+                while (A < this.Generator.FeatureMaps[0].Length)
+                {
+                    B = 0;
+                    while (B < this.Generator.FeatureMaps[0][A].Length)
+                    {
+                        C = 0;
+                        while (C < this.Generator.FeatureMaps[0][A][B].Length)
+                        {
+                        
+                            NeuronIndex = (int)((A * Math.Pow(this.Generator.FeatureMaps[0][A].Length, 2)) + (B * this.Generator.FeatureMaps[0][A].Length) + C);
+
+                            D = 0;
+                            while (D < this.Generator.NeuralNet.Activations[this.Generator.NeuralNet.Activations.Length - 1].Length)
+                            {
+
+                                switch (OptimizerID)
+                                    {
+                                        case 0:
+
+                                            break;
+
+                                        case 1:
+                                            this.Generator.LastTransitionWeights[NeuronIndex][D] = this.Generator.NeuralNet.RMSConst * this.Generator.LastTransitionWeights[NeuronIndex][D] + (1.0 - this.Generator.NeuralNet.RMSConst) * (Math.Pow((this.Generator.ErrorMaps[0][A][B][C] * this.Generator.DerivativeFeatureMaps[0][A][B][C] * Inputs[D]), 2));
+                                            TempVal = (this.Generator.NeuralNet.LearningRate * (TempList[D] * this.Generator.DerivativeFeatureMaps[0][A][B][C] * this.CurrentSeed[D]) / Math.Sqrt(this.Generator.LastTransitionWeights[NeuronIndex][D] + 0.000000001));
+                                            this.Generator.TransitionWeights[NeuronIndex][D] += TempVal;
+
+                                            this.Generator.TransitionWeightsDeltas[NeuronIndex][D] = TempVal;
+
+                                            break;
+
+                                        case 2:
+                                            this.Generator.LastTransitionWeights[NeuronIndex][D] = (this.Generator.LastTransitionWeights[NeuronIndex][D] * this.Generator.NeuralNet.B1 + (1.0 - this.Generator.NeuralNet.B1) * (this.Generator.ErrorMaps[0][A][B][C] * this.Generator.DerivativeFeatureMaps[0][A][B][C] * Inputs[D]));// / (1.0 - Math.Pow(this.Generator.NeuralNet.B1, this.Generator.IterationCounter));
+                                            this.Generator.LastTransitionWeights2[NeuronIndex][D] = (this.Generator.LastTransitionWeights2[NeuronIndex][D] * this.Generator.NeuralNet.B2 + (1.0 - this.Generator.NeuralNet.B2) * Math.Pow(this.Generator.ErrorMaps[0][A][B][C] * this.Generator.DerivativeFeatureMaps[0][A][B][C] * Inputs[D], 2));// / (1.0 - Math.Pow(this.Generator.NeuralNet.B2, this.Generator.IterationCounter));
+                                            TempVal = (this.Generator.NeuralNet.LearningRate * this.Generator.LastTransitionWeights[NeuronIndex][D] / (Math.Sqrt(this.Generator.LastTransitionWeights2[NeuronIndex][D]) + 0.000000001));
+                                            this.Generator.TransitionWeights[NeuronIndex][D] -= TempVal;
+
+                                            break;
+
+                                    }
+
+
+                                D++;
+                            }
+
+                            C++;
+                        }
+
+                        B++;
+                    }
+
+                    A++;
+                }
+
+
+            this.Generator.IterationCounter++;
+
+            //this.Generator.NeuralNet.BackPropagate(this.CurrentSeed, TempList, OptimizerID, true, true, DiscriminatorActivation);
+        }
+
+        public double[][][] CropMaps(double[][][] Inputs, int NewMapDims)
+        {
+            int X = 0;
+            double[][][] RetVal = new double[Inputs.Length][][];
+
+            while (X < Inputs.Length)
+            {
+                RetVal[X] = CropMap(Inputs[X], NewMapDims);
 
                 X++;
             }
@@ -231,512 +387,59 @@ namespace MaddoxNET
             return RetVal;
         }
 
-        public void RedimGeneratorTransitionWeights()
+        public double[][][] PadLayerMaps(double[][][] InputLayerMaps, int PaddingSize, double InitVal = 0)
         {
+            double[][][] RetVal = new double[InputLayerMaps.Length][][];
+            int X = 0;
+
+            while (X < InputLayerMaps.Length)
+            {
+                RetVal[X] = PadMap(InputLayerMaps[X], PaddingSize,InitVal);
+
+                X++;
+            }
+
+            return RetVal;
+        }
+
+        public double[][] PadMap(double[][] InputMap, int PaddingSize,double InitVal = 0)
+        {
+            double[] TempList1;
+            double[][] TempList2 = new double[InputMap.Length + (2 * PaddingSize)][];
             int X = 0;
             int Y = 0;
-            double[] TempList1;
-            double[][] TempList2;
-            double[] TempList1Hist;
-            double[][] TempList2Hist;
-            double[] TempList1Hist2;
-            double[][] TempList2Hist2;
-            double Z1;
-            double U1;
-            double U2;
 
-            TempList2 = new double[this.Generator.Flatten3DVector(this.Generator.BatchNormAvg[0]).Length][];
-            TempList2Hist = new double[this.Generator.Flatten3DVector(this.Generator.BatchNormAvg[0]).Length][];
-            TempList2Hist2 = new double[this.Generator.Flatten3DVector(this.Generator.BatchNormAvg[0]).Length][];
-
-            while (X < this.Generator.Flatten3DVector(this.Generator.BatchNormAvg[0]).Length)
+            while (X < InputMap.Length + (2 * PaddingSize))
             {
-                TempList1 = new double[this.Generator.NeuralNetwork.BatchNormActivations[0][this.Generator.NeuralNetwork.BatchNormActivations[0].Length - 1].Length];
-                TempList1Hist = new double[this.Generator.NeuralNetwork.BatchNormActivations[0][this.Generator.NeuralNetwork.BatchNormActivations[0].Length - 1].Length];
-                TempList1Hist2 = new double[this.Generator.NeuralNetwork.BatchNormActivations[0][this.Generator.NeuralNetwork.BatchNormActivations[0].Length - 1].Length];
+                TempList1 = new double[InputMap.Length + (2 * PaddingSize)];
                 Y = 0;
-                while(Y < this.Generator.NeuralNetwork.BatchNormActivations[0][this.Generator.NeuralNetwork.BatchNormActivations[0].Length -1].Length)
+                while (Y < InputMap.Length + (2 * PaddingSize))
                 {
-                    U1 = 1.0 - Rnd.NextDouble();
-                    U2 = 1.0 - Rnd.NextDouble();
-                    Z1 = Math.Sqrt(-2.0 * Math.Log(U1)) * Math.Cos(2 * Math.PI * U2);
-
-                    TempList1[Y] = Z1 * 0.1;
-                    TempList1Hist[Y] = 0;
-                    TempList1Hist2[Y] = 0;
+                    TempList1[Y] = InitVal;
 
                     Y++;
                 }
 
                 TempList2[X] = TempList1;
-                TempList2Hist[X] = TempList1Hist;
-                TempList2Hist2[X] = TempList1Hist2;
 
                 X++;
             }
-
-            this.Generator.TransitionWeights = TempList2;
-            this.Generator.TransitionWeightsHist1 = TempList2Hist;
-            this.Generator.TransitionWeightsHist2 = TempList2Hist2;
-        }
-
-        public void FeedForwardGeneratorBatch(double[][] Inputs, bool PoolFeatures, int OutputNormalization = 9, bool NormalizeOutputs = true)
-        {
-            double[][][] FinalInputs;
-            double[][][] SubInputs;
-            double[][][] SubInputs2;
-            double[][][][] ConvMaps;
-            double[][][][] NormalizedMaps;
-            double[][][][] ActivatedMaps;
-            double[][][][] DerivMaps;
-            int X = 0;
-            int Y = 0;
-            int Z = 0;
-            int ZZ = 0;
-            int A = 0;
-            int B = 0;
-            double NetSignal;
-            double[] TempList1;
-            double[][] TempList2;
-            double[][][] TempList3;
-            double[][][][] BatchTransition;
-            int NeuronID;
-
-            //this.Generator.FeatureMaps = new double[Inputs.Length][][][];
-            //this.Generator.RawFeatureMaps = new double[Inputs.Length][][][];
-            //this.Generator.DerivativeFeatureMaps = new double[Inputs.Length][][][];
-            //this.Generator.PrePoolFeatureMaps = new double[Inputs.Length][][][];
-            //this.Generator.MaxFeatureMaps = new double[Inputs.Length][][][][];
-            this.Generator.InitializeDeltas();
-            //this.Generator.InitializeMV(Inputs.Length);
-            this.Generator.InitializeBatch(Inputs.Length);
-
-            this.Generator.NeuralNetwork.ForwardPropagateBatch(Inputs);
-
-
-            BatchTransition = new double[Inputs.Length][][][];
-            B = 0;
-            while(B < Inputs.Length)
-            {
-                TempList3 = new double[this.Generator.BatchNormFeatureMaps[B][0].Length][][];
-                X = 0;
-                while (X < this.Generator.BatchNormFeatureMaps[B][0].Length)
-                {
-                    TempList2 = new double[this.Generator.BatchNormFeatureMaps[B][0][X].Length][];
-                    Y = 0;
-                    while (Y < this.Generator.BatchNormFeatureMaps[B][0][X].Length)
-                    {
-                        TempList1 = new double[this.Generator.BatchNormFeatureMaps[B][0][X][Y].Length];
-                        Z = 0;
-                        while (Z < this.Generator.BatchNormFeatureMaps[B][0][X][Y].Length)
-                        {
-                            NetSignal = 0;
-                            A = 0;
-                            while (A < this.Generator.NeuralNetwork.BatchNormActivations[B][this.Generator.NeuralNetwork.BatchNormActivations[B].Length - 1].Length)
-                            {
-                                NeuronID = (int)((Y * this.Generator.BatchNormFeatureMaps[B][0][X][Y].Length) + Z + (X * Math.Pow(this.Generator.BatchNormFeatureMaps[B][0][X].Length, 2)));
-                                NetSignal += (this.Generator.NeuralNetwork.BatchNormActivations[B][this.Generator.NeuralNetwork.BatchNormActivations[B].Length - 1][A] * this.Generator.TransitionWeights[NeuronID][A]);
-
-                                A++;
-                            }
-
-                            TempList1[Z] = this.Generator.NeuralNetwork.ActivationFunction(NetSignal, this.Generator.NeuralNetwork.ActivationFunctions[0]);
-
-                            Z++;
-                        }
-
-                        TempList2[Y] = TempList1;
-
-                        Y++;
-                    }
-
-                    TempList3[X] = TempList2;
-
-                    X++;
-                }
-
-                BatchTransition[B] = TempList3;
-
-                B++;
-            }
-
-
-            ///////////////////////////////////////////////////
-
-            //SubInputs = this.Generator.ReshapeTensor(ReshapeTensorAssistant(this.Generator.NeuralNetwork.BatchNormActivations[this.Generator.NeuralNetwork.Activations.Length - 1],A), this.Generator.Filters[0].Length);
 
             X = 0;
-            while (X < this.Generator.Filters.Length)
+            while (X < InputMap.Length)
             {
-                ConvMaps = new double[Inputs.Length][][][];
-                A = 0;
-                while(A < Inputs.Length)
-                {
-                    if (X > 0)
-                    {
-                        SubInputs = new double[this.Generator.BatchNormFeatureMaps[A][X - 1].Length][][];
-                        SubInputs = this.Generator.BatchNormFeatureMaps[A][X - 1];
-                    }
-                    else
-                    {
-                        //SubInputs = this.Generator.ReshapeTensor(this.Generator.NeuralNetwork.BatchNormActivations[A][this.Generator.NeuralNetwork.BatchNormActivations[A].Length - 1], this.Generator.Filters[0].Length);
-                        SubInputs = BatchTransition[A];
-                    }
-
-                    ConvMaps[A] = (this.Generator.DeConvolve(SubInputs, this.Generator.Filters[X], this.Generator.PoolingSchedule[X], this.Generator.StrideSchedule[X],0,false));
-                    //ConvMaps[A] = (this.Generator.Convolve(SubInputs, this.Generator.Filters[X], this.Generator.StrideSchedule[X], false));
-
-                    A++;
-                }
-
-                if (this.Generator.BatchNormLayers[X] == 1)
-                {
-                    NormalizedMaps = this.Generator.ScaleAndShift(this.Generator.NormalizeBatch(ConvMaps, X), X);
-                }
-                else
-                {
-                    NormalizedMaps = ConvMaps;
-                }
-                
-
-                //Assign to class properties
                 Y = 0;
-                while (Y < NormalizedMaps.Length)
+                while (Y < InputMap[X].Length)
                 {
-                    this.Generator.BatchNormNetInputs[Y][X] = ConvMaps[Y];
-
-                    Y++;
-                }
-
-                DerivMaps = new double[Inputs.Length][][][];
-                A = 0;
-                while(A < DerivMaps.Length)
-                {
-                    DerivMaps[A] = this.Generator.ActivateDerivativeConvolutions(ConvMaps[A], this.Generator.CNNActivationFunctionIDs[X]);
-
-                    A++;
-                }
-
-                ActivatedMaps = new double[Inputs.Length][][][];
-                A = 0;
-                while(A < ActivatedMaps.Length)
-                {
-                    ActivatedMaps[A] = this.Generator.PoolLayer(this.Generator.ActivateConvolutions(NormalizedMaps[A], this.Generator.CNNActivationFunctionIDs[X]),X,true);
-
-                    A++;
-                }
-
-                //Assign to class properties
-
-                Y = 0;
-                while (Y < ActivatedMaps.Length)
-                {
-                    this.Generator.BatchNormFeatureMaps[Y][X] = ActivatedMaps[Y];
-
-                    Y++;
-                }
-
-                Y = 0;
-                while (Y < DerivMaps.Length)
-                {
-                    this.Generator.BatchNormDerivativeFeatureMaps[Y][X] = DerivMaps[Y];
+                    TempList2[X + PaddingSize][Y + PaddingSize] = InputMap[X][Y];
 
                     Y++;
                 }
 
                 X++;
             }
-        }
 
-        public void BackPropagateGeneratorBatch(double[][] Inputs, bool PoolActivations, bool TrainWeights, int WeightOptimizerID, int FilterOptimizerID, double[] DiscriminatorActivation, double[] DiscriminatorRawActivation, bool ErrorOnly = false, int OutputNormalization = 9, bool NormalizeOutputLayer = true, bool TrainFilters = true)
-        {
-            int X = this.Generator.Filters.Length - 1;
-            int Y = 0;
-            int Z = 0;
-            int ZZ = 0;
-            int ZZZ = 0;
-            int ZZZZ = 0;
-            int A = 0;
-            int B = 0;
-            int C = 0;
-            int D = 0;
-            int E = 0;
-            int I = 0;
-            int J = 0;
-            int K = 0;
-            double[][][] BackpropErrors = new double[0][][];
-            double[] TempList1;
-            double[][] TempList2;
-            double[][][] TempList3;
-            double[][][] FilterGradients = new double[0][][];
-            double[][][] LocalGradients = new double[0][][];
-            double[][][] NeuronGradients = new double[0][][];
-            double[][][][] NeuronGradientsBatch = new double[Inputs[0].Length][][][];
-            Random Rnd = new Random();
-
-            double Delta = 0;
-            double NewDelta = 0;
-            double ADAMDelta = 0;
-            double SGDDelta = 0;
-            double RMSPropDelta = 0;
-            double TempVal1 = 0;
-            double TempVal2 = 0;
-            double TempVal3 = 0;
-            int FunctionID = 0;
-            double L2 = 0;
-            int ZZZZMax = 0;
-            double ErrorVal = 0;
-            int NeuronIndex;
-            //this.Errors = new List<List<List<List<double>>>>();
-
-            this.FeedForwardGeneratorBatch((Inputs), PoolActivations, OutputNormalization, NormalizeOutputLayer);
-
-            //InitializeNetwork();
-
-
-
-            A = 0;
-            while(A < Inputs.Length)
-            {
-                E = this.Generator.Filters.Length - 1;
-                while (E >= 0)
-                {
-                    if (E == this.Generator.Filters.Length - 1)
-                    {
-                        //NeuronGradients = this.Generator.DeConvolve(this.Discriminator.BatchNormErrors[A][0], this.Generator.Filters[E], 1, 0);
-
-                        //NeuronGradients = this.Generator.ResolveAveragePooling(NeuronGradients, E);
-                        ErrorVal = -1.0/DiscriminatorActivation[A];
-                        NeuronGradients = this.MultiplyMapsByScalar(this.Generator.BatchNormDerivativeFeatureMaps[A][E], ErrorVal);
-                        //NeuronGradients = this.Generator.ElementWiseMultiply(NeuronGradients, this.Generator.BatchNormDerivativeFeatureMaps[A][E]);
-                        FilterGradients = this.Generator.Convolve(NeuronGradients,this.Generator.BatchNormFeatureMaps[A][E - 1], 1, false);
-
-                        //BackpropErrors = this.Generator.DeConvolve(NeuronGradients, this.Generator.Filters[E - 1],this.Generator.PoolingSchedule[E], 1, (this.Generator.Filters[E][0].Length - 1) * this.Generator.PoolingSchedule[E - 1]);
-                        BackpropErrors = this.Generator.Convolve(NeuronGradients, this.Generator.Filters[E - 1], 1, true);
-                    }
-                    else
-                    {
-                        NeuronGradients = BackpropErrors;
-                        //NeuronGradients = this.Generator.ResolveAveragePooling(BackpropErrors, E);
-                        //NeuronGradients = BackpropErrors;
-
-                        if (E == 0)
-                        {
-                            LocalGradients = new double[1][][];
-                            LocalGradients[0] = this.Generator.ExpandVector(this.Generator.NeuralNetwork.BatchNormActivations[A][this.Generator.NeuralNetwork.BatchNormActivations[A].Length-1]);
-                            //LocalGradients[0] = Inputs;
-
-                            //LocalGradients[0] = this.CropMap(LocalGradients[0], LocalGradients[0].Length - 2);
-                            NeuronGradients = this.Generator.ElementWiseMultiply(NeuronGradients, this.Generator.BatchNormDerivativeFeatureMaps[A][E]);
-                            FilterGradients = this.Generator.Convolve(LocalGradients, NeuronGradients, 1, true);
-
-                            //NeuronGradients = this.Generator.PadLayerMaps(NeuronGradients, (this.Generator.Filters[0][0].Length - 1) * 1);
-
-                            //NeuronGradients = this.Generator.DeConvolve(NeuronGradients, this.Generator.Filters[E], 1, this.Generator.PoolingSchedule[E], (this.Generator.Filters[E][0].Length - 1) * this.Generator.PoolingSchedule[E]);
-                        }
-                        else
-                        {
-                            NeuronGradients = this.Generator.ElementWiseMultiply(NeuronGradients, this.Generator.BatchNormDerivativeFeatureMaps[A][E]);
-                            FilterGradients = this.Generator.Convolve(this.Generator.BatchNormFeatureMaps[A][E - 1], NeuronGradients, 1, false);
-
-                            //BackpropErrors = this.Generator.DeConvolve(NeuronGradients, this.Generator.Filters[E - 1], this.Generator.PoolingSchedule[E],1, (this.Generator.Filters[E][0].Length - 1) * this.Generator.PoolingSchedule[E - 1]);
-                            BackpropErrors = this.Generator.Convolve(NeuronGradients, this.Generator.Filters[E - 1], 1, true);
-                        }
-
-                    }
-
-                    this.Generator.BatchNormErrors[A][E] = (NeuronGradients);
-
-                    X = 0;
-                    while(X < this.Generator.BatchNormFeatureMaps[A][E].Length)
-                    {
-                        Y = 0;
-                        while(Y < this.Generator.BatchNormFeatureMaps[A][E][X].Length)
-                        {
-                            Z = 0;
-                            while(Z < this.Generator.BatchNormFeatureMaps[A][E][X][Y].Length)
-                            {
-                                TempVal1 = NeuronGradients[X][Y][Z] * this.Generator.BatchNormFeatureMaps[A][E][X][Y][Z];
-                                this.Generator.BatchNormGammaMovingAvg[E][X][Y][Z] = (this.Generator.NeuralNetwork.RMSPropConst * this.Generator.BatchNormGammaMovingAvg[E][X][Y][Z]) + ((Math.Pow(TempVal1, 2) * (1.0 - this.Generator.NeuralNetwork.RMSPropConst)));
-                                RMSPropDelta = this.Generator.LearningRate * TempVal1 / Math.Sqrt(this.Generator.BatchNormGammaMovingAvg[E][X][Y][Z] + 0.000000000000000000001)  ;
-
-                                this.Generator.BatchNormGamma[E][X][Y][Z] -= (RMSPropDelta);
-
-
-                                TempVal1 = NeuronGradients[X][Y][Z];
-                                this.Generator.BatchNormBetaMovingAvg[E][X][Y][Z] = (this.Generator.NeuralNetwork.RMSPropConst * this.Generator.BatchNormBetaMovingAvg[E][X][Y][Z]) + ((Math.Pow(TempVal1, 2) * (1.0 - this.Generator.NeuralNetwork.RMSPropConst)));
-                                RMSPropDelta = this.Generator.LearningRate * TempVal1 / Math.Sqrt(this.Generator.BatchNormBetaMovingAvg[E][X][Y][Z] + 0.000000000000000000001);
-
-                                this.Generator.BatchNormBeta[E][X][Y][Z] -= (RMSPropDelta);
-
-
-                                Z++;
-                            }
-
-                            Y++;
-                        }
-
-                        X++;
-                    }
-
-
-                    if (TrainFilters)
-                    {
-                        X = 0;
-                        while (X < this.Generator.Filters[E].Length)
-                        {
-                            Y = 0;
-                            while (Y < this.Generator.Filters[E][X].Length)
-                            {
-                                Z = 0;
-                                while (Z < this.Generator.Filters[E][X][Y].Length)
-                                {
-                                    switch (FilterOptimizerID)
-                                    {
-                                        case 0:
-                                            SGDDelta = FilterGradients[X][Y][Z];
-
-                                            this.Generator.BatchNormDeltas[E][X][Y][Z] += (SGDDelta * this.Generator.LearningRate);
-
-                                            //this.Generator.CurrentDeltas[E][X][Y][Z] += FilterGradients[X][Y][Z];
-                                            //this.Generator.PrevDeltas[E][X][Y][Z] += FilterGradients[X][Y][Z];
-                                            break;
-
-                                        case 1:
-                                            TempVal1 = (this.Generator.NeuralNetwork.RMSPropConst * this.Generator.FiltersM[A][E][X][Y][Z]) + (Math.Pow(FilterGradients[X][Y][Z], 2) * (1 - this.Generator.NeuralNetwork.RMSPropConst));
-                                            this.Generator.FiltersM[A][E][X][Y][Z] = TempVal1;
-                                            RMSPropDelta = this.Generator.LearningRate * FilterGradients[X][Y][Z] / (Math.Sqrt(TempVal1 + 0.000000000000000000001));
-                                            //this.Filters[E][X][Y][Z] = this.Filters[E][X][Y][Z] - RMSPropDelta;
-
-
-                                            this.Generator.BatchNormDeltas[E][X][Y][Z] += RMSPropDelta;
-                                            break;
-
-                                        case 2:
-                                            this.Generator.FiltersM[A][E][X][Y][Z] = (this.Generator.NeuralNetwork.B1 * this.Generator.FiltersM[A][E][X][Y][Z] + (1.0 - this.Generator.NeuralNetwork.B1) * FilterGradients[X][Y][Z]);
-                                            this.Generator.FiltersV[A][E][X][Y][Z] = (this.Generator.NeuralNetwork.B2 * this.Generator.FiltersV[A][E][X][Y][Z] + (1.0 - this.Generator.NeuralNetwork.B2) * Math.Pow(FilterGradients[X][Y][Z], 2));
-                                            ADAMDelta = this.Generator.LearningRate * (this.Generator.FiltersM[A][E][X][Y][Z] / (1.0 - Math.Pow(this.Generator.NeuralNetwork.B1, this.Generator.GlobalIterator)) / (Math.Sqrt((this.Generator.FiltersV[A][E][X][Y][Z] / (1.0 - Math.Pow(this.Generator.NeuralNetwork.B2, this.Generator.GlobalIterator))) + 0.0000000000000001)));
-                                            this.Generator.BatchNormDeltas[E][X][Y][Z] += ADAMDelta;
-                                            //this.Generator.Filters[E][X][Y][Z] = this.Generator.Filters[E][X][Y][Z] - this.Generator.LearningRate * ADAMDelta;
-                                            break;
-                                    }
-
-                                    Z++;
-                                }
-
-                                Y++;
-                            }
-
-                            X++;
-                        }
-                    }
-
-                    //NormalizeFilters(E);
-
-
-                    E--;
-                }
-
-                A++;
-            }
-            E = this.Generator.Filters.Length - 1;
-
-          
-            this.Generator.ApplyGradients();
-
-            TempList2 = new double[Inputs.Length][];
-            B = 0;
-            while(B < Inputs.Length)
-            {
-                TempList1 = new double[this.Generator.NeuralNetwork.BatchNormActivations[B][this.Generator.NeuralNetwork.BatchNormActivations[B].Length - 1].Length];
-                A = 0;
-                while (A < this.Generator.NeuralNetwork.BatchNormActivations[B][this.Generator.NeuralNetwork.BatchNormActivations[B].Length - 1].Length)
-                {
-                    Delta = 0;
-                    X = 0;
-                    while (X < this.Generator.BatchNormErrors[B][0].Length)
-                    {
-                        Y = 0;
-                        while (Y < this.Generator.BatchNormErrors[B][0][X].Length)
-                        {
-                            Z = 0;
-                            while (Z < this.Generator.BatchNormErrors[B][0][X][Y].Length)
-                            {
-                                NeuronIndex = (int)((X * Math.Pow(this.Generator.BatchNormErrors[B][0][X].Length, 2)) + (Y * this.Generator.BatchNormErrors[B][0][X].Length) + Z);
-
-
-                                if(NeuronIndex < this.Generator.TransitionWeights.Length)
-                                {
-                                    Delta += (this.Generator.BatchNormErrors[B][0][X][Y][Z] * this.Generator.TransitionWeights[NeuronIndex][A]);
-                                }
-                                else
-                                {
-                                    break;
-                                }
-                                
-
-                                Z++;
-                            }
-
-                            Y++;
-                        }
-
-                        X++;
-                    }
-
-                    TempList1[A] = Delta;
-
-                    A++;
-                }
-
-                TempList2[B] = TempList1;
-
-                X = 0;
-                while(X < this.Generator.BatchNormErrors[B][0].Length)
-                {
-                    Y = 0;
-                    while(Y < this.Generator.BatchNormErrors[B][0][X].Length)
-                    {
-                        Z = 0;
-                        while(Z < this.Generator.BatchNormErrors[B][0][X][Y].Length)
-                        {
-                            A = 0;
-                            while(A < this.Generator.NeuralNetwork.BatchNormActivations[B][this.Generator.NeuralNetwork.BatchNormActivations[B].Length - 1].Length)
-                            {
-                                NeuronIndex = (int)((X * Math.Pow(this.Generator.BatchNormErrors[B][0][X].Length, 2)) + (Y * this.Generator.BatchNormErrors[B][0][X].Length) + Z);
-
-                                Delta = TempList2[B][A] * this.Generator.NeuralNetwork.ActivationFunctionDerivative(this.Generator.NeuralNetwork.BatchNormNetInputs[B][this.Generator.NeuralNetwork.BatchNormActivations[B].Length - 1][A], this.Generator.NeuralNetwork.ActivationFunctions[this.Generator.NeuralNetwork.BatchNormActivations[B].Length - 1]);
-
-
-                                this.Generator.TransitionWeightsHist1[B][NeuronIndex] = (this.Generator.NeuralNetwork.B1 * this.Generator.TransitionWeightsHist1[B][NeuronIndex] + (1.0 - this.Generator.NeuralNetwork.B1) * Delta);
-                                this.Generator.TransitionWeightsHist2[B][NeuronIndex] = (this.Generator.NeuralNetwork.B2 * this.Generator.TransitionWeightsHist2[B][NeuronIndex] + (1.0 - this.Generator.NeuralNetwork.B2) * Math.Pow(Delta, 2));
-                                ADAMDelta = this.Generator.NeuralNetwork.LearningRate * (this.Generator.TransitionWeightsHist1[B][NeuronIndex] / (1.0 - Math.Pow(this.Generator.NeuralNetwork.B1, this.Generator.GlobalIterator)) / (Math.Sqrt((this.Generator.TransitionWeightsHist2[B][NeuronIndex] / (1.0 - Math.Pow(this.Generator.NeuralNetwork.B2, this.Generator.GlobalIterator))) + 0.0000000000000001)));
-
-                                //this.Generator.Filters[E][X][Y][Z] = this.Generator.Filters[E][X][Y][Z] - RMSPropDelta;
-
-                                this.Generator.TransitionWeights[NeuronIndex][A] -= (RMSPropDelta);
-
-                                A++;
-                            }
-
-                            Z++;
-                        }
-
-                        Y++;
-                    }
-
-                    X++;
-                }
-
-
-                B++;
-            }
-
-
-
-            
-            //NeuronGradients = this.PoolMaps(this.Errors[0]);-
-            this.Generator.NeuralNetwork.BackPropagateBatchGenerator((Inputs), TempList2, OutputNormalization, TrainWeights, WeightOptimizerID, DiscriminatorActivation, DiscriminatorRawActivation, ErrorOnly, NormalizeOutputLayer);
+            return TempList2;
         }
 
         public double[][] CropMap(double[][] Inputs, int NewMapDims)
@@ -774,170 +477,342 @@ namespace MaddoxNET
             return TempList2;
         }
 
-        public void BackPropagateGenerator(double[] Inputs, double[][][] Outputs, bool PoolActivations, bool TrainWeights, int WeightOptimizerID, int FilterOptimizerID, bool ErrorOnly = false, int OutputNormalization = 9, bool NormalizeOutputLayer = true, bool TrainFilters = true, double DiscriminatorActivation = 0, double DiscriminatorRawActivation = 0)
+        public void GeneratorInitialize(int[] FeatureActivationIDs, int[] PoolingSched, int[] FilterCounts, int[] FilterDims, int ImageDims, int[] ANNLayerCounts, int[] ANNActivationIDs, double LearningRate)
         {
-            int X = this.Generator.Filters.Length - 1;
-            int Y = 0;
-            int Z = 0;
-            int ZZ = 0;
-            int ZZZ = 0;
-            int ZZZZ = 0;
             int A = 0;
             int B = 0;
             int C = 0;
             int D = 0;
-            int E = 0;
-            int I = 0;
-            int J = 0;
-            int K = 0;
-            List<double> LocalActivations = new List<double>();
-            List<double> PreviousActivations = new List<double>();
-            List<double> PreviousErrors = new List<double>();
-            List<double> LocalErrors = new List<double>();
-            List<double> PreviousWeights = new List<double>();
-            List<double> Filters = new List<double>();
-            List<double> TempList = new List<double>();
-            List<List<double>> TempList2 = new List<List<double>>();
-            List<List<List<List<double>>>> Errors = new List<List<List<List<double>>>>();
-            List<List<List<double>>> SubErrors = new List<List<List<double>>>();
-            double[][][] BackpropErrors = new double[0][][];
-            List<List<double>> SubSubErrors = new List<List<double>>();
-            List<double> SubSubSubErrors = new List<double>();
+            double[] TempFilters1;
+            double[][] TempFilters2;
+            double[][][] TempFilters3;
+            double[] TempFeatureMaps1;
+            double[][] TempFeatureMaps2;
+            double[][][] TempFeatureMaps3;
+            double[] TempNetFeatureMaps1;
+            double[][] TempNetFeatureMaps2;
+            double[][][] TempNetFeatureMaps3;
+            double[] TempDerivativeFeatureMaps1;
+            double[][] TempDerivativeFeatureMaps2;
+            double[][][] TempDerivativeFeatureMaps3;
+            double[] TempDeltaMaps1;
+            double[][] TempDeltaMaps2;
+            double[][][] TempDeltaMaps3;
+            double[] TempErrorMaps1;
+            double[][] TempErrorMaps2;
+            double[][][] TempErrorMaps3;
+            double[] TempLastFilter1;
+            double[][] TempLastFilter2;
+            double[][][] TempLastFilter3;
+            double[] TempLastFilter21;
+            double[][] TempLastFilter22;
+            double[][][] TempLastFilter23;
+            double[] TempTransitionWeights;
+            double[] TempTransitionWeightDeltas;
+            double[] TempLastTransitionWeights;
+            double[] TempLastTransitionWeights2;
+            double TempImageDims = ImageDims;
+            double TempPoolDims = ImageDims;
+            Random Rnd = new Random(System.Guid.NewGuid().GetHashCode());
 
-            double[][][] FilterGradients = new double[0][][];
-            double[][][] LocalGradients = new double[0][][];
-            List<List<List<double>>> ErrorGradients = new List<List<List<double>>>();
-            double[][][] NeuronGradients = new double[0][][];
-            List<List<List<double>>> DerivativeGradients = new List<List<List<double>>>();
-            List<List<List<double>>> PrevLayerGradients = new List<List<List<double>>>();
-            List<List<List<double>>> SubFilters = new List<List<List<double>>>();
-            List<List<List<double>>> SubFilters2 = new List<List<List<double>>>();
-            List<List<double>> SubSubFilters = new List<List<double>>();
-            List<double> SubSubSubFilters = new List<double>();
-            Random Rnd = new Random();
+            this.Generator.PoolingSchedule = PoolingSched;
+            this.Generator.ActivationFunctions = FeatureActivationIDs;
+            this.Generator.NeuralNet = new ANN(ANNLayerCounts, ANNActivationIDs, LearningRate);
+            this.Generator.FeatureMaps = new double[FilterCounts.Length][][][];
+            this.Generator.NetFeatureMaps = new double[FilterCounts.Length][][][];
+            this.Generator.DerivativeFeatureMaps = new double[FilterCounts.Length][][][];
+            this.Generator.DeltaMaps = new double[FilterCounts.Length][][][];
+            this.Generator.ErrorMaps = new double[FilterCounts.Length][][][];
+            this.Generator.Filters = new double[FilterCounts.Length][][][];
+            this.Generator.LastFilters = new double[FilterCounts.Length][][][];
+            this.Generator.LastFilters2 = new double[FilterCounts.Length][][][];
 
-            double Delta = 0;
-            double NewDelta = 0;
-            double ADAMDelta = 0;
-            double SGDDelta = 0;
-            double RMSPropDelta = 0;
-            double TempVal1 = 0;
-            double TempVal2 = 0;
-            double TempVal3 = 0;
-            int FunctionID = 0;
-            double L2 = 0;
-            int ZZZZMax = 0;
-            //this.Errors = new List<List<List<List<double>>>>();
+            TempImageDims = ImageDims * PoolingSched[0];
+            TempPoolDims = TempImageDims;
 
-            this.FeedForwardGenerator((Inputs), PoolActivations, OutputNormalization, NormalizeOutputLayer);
-
-            //InitializeNetwork();
-
-
-            E = this.Generator.Filters.Length - 1;
-
-            while (E >= 0)
+            while (A < FilterCounts.Length)
             {
-                if (E == this.Generator.Filters.Length - 1)
+                TempFeatureMaps3 = new double[FilterCounts[A]][][];
+                TempNetFeatureMaps3 = new double[FilterCounts[A]][][];
+                TempDerivativeFeatureMaps3 = new double[FilterCounts[A]][][];
+                TempDeltaMaps3 = new double[FilterCounts[A]][][];
+                TempErrorMaps3 = new double[FilterCounts[A]][][];
+                TempFilters3 = new double[FilterCounts[A]][][];
+                TempLastFilter3 = new double[FilterCounts[A]][][];
+                TempLastFilter23 = new double[FilterCounts[A]][][];
+
+                TempImageDims = TempImageDims;
+
+                B = 0;
+                while (B < FilterCounts[A])
                 {
-                    NeuronGradients = this.Generator.DeConvolve(this.Discriminator.Errors[0], this.Generator.Filters[E],this.Discriminator.PoolingSchedule[E], 1, 0);
+                    //Set up everything but filters
+                    TempNetFeatureMaps2 = new double[(int)TempImageDims][];
+                    TempDerivativeFeatureMaps2 = new double[(int)TempImageDims][];                    
+                    TempErrorMaps2 = new double[(int)TempImageDims][];
+                    TempFeatureMaps2 = new double[(int)TempImageDims][];
 
-                    NeuronGradients = this.Generator.ResolveAveragePooling(NeuronGradients, E);
-                    //NeuronGradients = MultiplyMapsByScalar(NeuronGradients, ((1.0 / DiscriminatorActivation)));
-                    NeuronGradients = this.Generator.ElementWiseMultiply(NeuronGradients, this.Generator.DerivativeFeatureMaps[E]);
-                    FilterGradients = this.Generator.Convolve(this.Generator.FeatureMaps[E - 1], NeuronGradients, 1, false);
-
-                    BackpropErrors = this.Generator.DeConvolve(NeuronGradients, this.Generator.Filters[E - 1],this.Discriminator.PoolingSchedule[E], 1, (this.Generator.Filters[E][0].Length - 1) * this.Generator.PoolingSchedule[E-1]);
-                }
-                else
-                {
-                    NeuronGradients = this.Generator.ResolveAveragePooling(BackpropErrors, E);
-                    //NeuronGradients = BackpropErrors;
-
-                    if (E == 0)
+                    C = 0;
+                    while (C < TempImageDims)
                     {
-                        LocalGradients = new double[1][][];
-                        LocalGradients[0] = this.Generator.ExpandVector(this.Generator.NeuralNetwork.Activations[this.Generator.NeuralNetwork.Activations.Length - 1]);
+                        TempNetFeatureMaps1 = new double[(int)TempImageDims];
+                        TempDerivativeFeatureMaps1 = new double[(int)TempImageDims];
+                        TempErrorMaps1 = new double[(int)TempImageDims];
+                        TempFeatureMaps1 = new double[(int)TempImageDims];
 
-                        NeuronGradients = this.Generator.ElementWiseMultiply(NeuronGradients, this.Generator.DerivativeFeatureMaps[E]);
-                        FilterGradients = this.Generator.Convolve(this.Generator.ReshapeTensor(this.Generator.NeuralNetwork.Activations[this.Generator.NeuralNetwork.Activations.Length - 1], this.Generator.Filters[0].Length), NeuronGradients, 1, false);
-
-                        NeuronGradients = this.Generator.PadLayerMaps(NeuronGradients, (this.Generator.Filters[0][0].Length - 1) * 1);
-
-                    }
-                    else
-                    {
-                        NeuronGradients = this.Generator.ElementWiseMultiply(NeuronGradients, this.Generator.DerivativeFeatureMaps[E]);
-                        FilterGradients = this.Generator.Convolve(this.Generator.FeatureMaps[E - 1], NeuronGradients, 1, false);
-
-                        BackpropErrors = this.Generator.DeConvolve(NeuronGradients, this.Generator.Filters[E - 1],this.Discriminator.PoolingSchedule[E], 1, (this.Generator.Filters[E][0].Length - 1) * this.Generator.PoolingSchedule[E-1]);
-                    }
-
-                }
-
-                this.Generator.Errors[E] = (NeuronGradients);
-
-                if (TrainFilters)
-                {
-                    X = 0;
-                    while (X < this.Generator.Filters[E].Length)
-                    {
-                        Y = 0;
-                        while (Y < this.Generator.Filters[E][X].Length)
+                        D = 0;
+                        while (D < TempImageDims)
                         {
-                            Z = 0;
-                            while (Z < this.Generator.Filters[E][X][Y].Length)
-                            {
-                                switch (FilterOptimizerID)
-                                {
-                                    case 0:
-                                        SGDDelta = FilterGradients[X][Y][Z];
+                            TempNetFeatureMaps1[D] = 0;
+                            TempDerivativeFeatureMaps1[D] = 0;
+                            TempErrorMaps1[D] = 0;
+                            TempFeatureMaps1[D] = 0;
 
-                                        this.Generator.Filters[E][X][Y][Z] = this.Generator.Filters[E][X][Y][Z] - (SGDDelta * this.Generator.LearningRate);
-
-                                        //this.Generator.CurrentDeltas[E][X][Y][Z] += FilterGradients[X][Y][Z];
-                                        //this.Generator.PrevDeltas[E][X][Y][Z] += FilterGradients[X][Y][Z];
-                                        break;
-
-                                    case 1:
-                                        //TempVal1 = (this.Generator.NeuralNetwork.RMSPropConst * this.Generator.PrevDeltas[E][X][Y][Z]) + (Math.Pow(FilterGradients[X][Y][Z], 2) * (1 - this.Generator.NeuralNetwork.RMSPropConst));
-                                        //this.Generator.PrevDeltas[E][X][Y][Z] = TempVal1;
-                                        RMSPropDelta = this.Generator.LearningRate / (Math.Sqrt(TempVal1 + 0.00000000000000001)) * FilterGradients[X][Y][Z];
-                                        //this.Generator.Filters[E][X][Y][Z] = this.Generator.Filters[E][X][Y][Z] - RMSPropDelta;
-
-                                        //this.Generator.CurrentDeltas[E][X][Y][Z] = RMSPropDelta;
-                                        break;
-
-                                    case 2:
-                                        //this.Generator.FiltersM[E][X][Y][Z] = (this.Generator.NeuralNetwork.B1 * this.Generator.FiltersM[E][X][Y][Z] + (1 - this.Generator.NeuralNetwork.B1) * FilterGradients[X][Y][Z]);
-                                        //this.Generator.FiltersV[E][X][Y][Z] = (this.Generator.NeuralNetwork.B2 * this.Generator.FiltersV[E][X][Y][Z] + (1 - this.Generator.NeuralNetwork.B2) * Math.Pow(FilterGradients[X][Y][Z], 2));
-                                        //ADAMDelta = (this.Generator.FiltersM[E][X][Y][Z] / (1.0f - this.Generator.NeuralNetwork.B1)) / Math.Sqrt((this.Generator.FiltersV[E][X][Y][Z] / (1.0f - this.Generator.NeuralNetwork.B2)) + 0.000000000000000000001);
-                                        ////this.Generator.CurrentDeltas[E][X][Y][Z] += ADAMDelta;
-                                        //this.Generator.Filters[E][X][Y][Z] = this.Generator.Filters[E][X][Y][Z] - this.Generator.LearningRate * ADAMDelta;
-                                        break;
-                                }
-
-                                Z++;
-                            }
-
-                            Y++;
+                            D++;
                         }
 
-                        X++;
+                        TempNetFeatureMaps2[C] = TempNetFeatureMaps1;
+                        TempDerivativeFeatureMaps2[C] = TempDerivativeFeatureMaps1;
+                        TempErrorMaps2[C] = TempErrorMaps1;
+                        TempFeatureMaps2[C] = TempFeatureMaps1;
+
+                        C++;
                     }
+
+                    TempNetFeatureMaps3[B] = TempNetFeatureMaps2;
+                    TempDerivativeFeatureMaps3[B] = TempDerivativeFeatureMaps2;
+                    TempErrorMaps3[B] = TempErrorMaps2;
+                    TempFeatureMaps3[B] = TempFeatureMaps2;
+
+                    //Set up post pooling feature maps
+                    TempPoolDims = (int)(TempImageDims * this.Generator.PoolingSchedule[A]);
+
+
+                    //Set up filters
+                    TempFilters2 = new double[FilterDims[A]][];
+                    TempLastFilter2 = new double[FilterDims[A]][];
+                    TempLastFilter22 = new double[FilterDims[A]][];
+                    TempDeltaMaps2 = new double[FilterDims[A]][];
+
+                    C = 0;
+                    while (C < FilterDims[A])
+                    {
+                        TempFilters1 = new double[FilterDims[A]];
+                        TempLastFilter1 = new double[FilterDims[A]];
+                        TempLastFilter21 = new double[FilterDims[A]];
+                        TempDeltaMaps1 = new double[FilterDims[A]];
+
+                        D = 0;
+                        while (D < FilterDims[A])
+                        {
+                            if(A == FilterDims.Length - 1)
+                            {
+                                TempFilters1[D] = (0.1 * (Math.Sqrt(-2.0 * Math.Log(1.0 - Rnd.NextDouble())) * Math.Cos(2.0 * Math.PI * (1.0 - Rnd.NextDouble()))));
+                            }
+                            else
+                            {
+                                TempFilters1[D] = (0.1 * (Math.Sqrt(-2.0 * Math.Log(1.0 - Rnd.NextDouble())) * Math.Cos(2.0 * Math.PI * (1.0 - Rnd.NextDouble()))));
+                            }
+                            
+
+                            //TempFilters1[D] = Rnd.NextDouble() * 0.01;
+
+                            TempLastFilter1[D] = 0;
+                            TempLastFilter21[D] = 0;
+                            TempDeltaMaps1[D] = 0;
+
+                            D++;
+                        }
+
+                        TempFilters2[C] = TempFilters1;
+                        TempLastFilter2[C] = TempLastFilter1;
+                        TempLastFilter22[C] = TempLastFilter21;
+                        TempDeltaMaps2[C] = TempDeltaMaps1;
+
+                        C++;
+                    }
+
+                    TempFilters3[B] = TempFilters2;
+                    TempLastFilter3[B] = TempLastFilter2;
+                    TempLastFilter23[B] = TempLastFilter22;
+                    TempDeltaMaps3[B] = TempDeltaMaps2;
+
+                    B++;
                 }
 
-                //NormalizeFilters(E);
+                this.Generator.FeatureMaps[A] = TempFeatureMaps3;
+                this.Generator.NetFeatureMaps[A] = TempNetFeatureMaps3;
+                this.Generator.DerivativeFeatureMaps[A] = TempDerivativeFeatureMaps3;
+                this.Generator.ErrorMaps[A] = TempErrorMaps3;
+                this.Generator.DeltaMaps[A] = TempDeltaMaps3;
+                this.Generator.Filters[A] = TempFilters3;
+                this.Generator.LastFilters[A] = TempLastFilter3;
+                this.Generator.LastFilters2[A] = TempLastFilter23;
 
+                TempImageDims = TempPoolDims;
 
-                E--;
+                A++;
             }
 
-            //NeuronGradients = this.PoolMaps(this.Errors[0]);-
-            this.Generator.NeuralNetwork.BackPropagate((Inputs), this.Generator.Flatten3DVector((this.Generator.Errors[0])), OutputNormalization, TrainWeights, WeightOptimizerID, ErrorOnly, NormalizeOutputLayer, DiscriminatorActivation, DiscriminatorRawActivation);
         }
 
-        public double[][][] MultiplyMapsByScalar(double[][][] InputMaps,double Scalarval)
+        public double[] Flatten3DVector(double[][][] Input)
+        {
+            //Normal: 2x63x63
+            int X = 0;
+            int Y = 0;
+            int Z = 0;
+            List<double> RetVal = new List<double>();
+            double[] FinalRetVal;
+
+            while (X < Input.Length)
+            {
+                Y = 0;
+                while (Y < Input[X].Length)
+                {
+                    Z = 0;
+                    while (Z < Input[X][Y].Length)
+                    {
+                        RetVal.Add(Input[X][Y][Z]);
+
+                        Z++;
+                    }
+
+                    Y++;
+                }
+
+                X++;
+            }
+
+            FinalRetVal = new double[RetVal.Count];
+
+            X = 0;
+            while (X < RetVal.Count)
+            {
+                FinalRetVal[X] = RetVal[X];
+
+                X++;
+            }
+
+            return FinalRetVal;
+        }
+
+        public void RedimGeneratorTransitionWeights()
+        {
+            int X = 0;
+            int Y = 0;
+            double[] TempDeltas1;
+            double[][] TempDeltas2;
+            double[] TempList1;
+            double[][] TempList2;
+            double[] TempList1Hist;
+            double[][] TempList2Hist;
+            double[] TempList1Hist2;
+            double[][] TempList2Hist2;
+            double[] TempList3;
+            double Z1;
+            double U1;
+            double U2;
+            Random Rnd = new Random(System.Guid.NewGuid().GetHashCode());
+
+            //TempList3 = new double[this.Flatten3DVector(this.PadLayerMaps(this.Generator.FeatureMaps[0], (int)((this.Generator.Filters[0][0].Length - 1)/2))).Length];
+            TempList3 = new double[this.Flatten3DVector(this.Generator.FeatureMaps[0]).Length];
+
+            this.Generator.TransitionValues = new double[TempList3.Length];
+
+            TempList2 = new double[TempList3.Length][];
+            TempList2Hist = new double[TempList3.Length][];
+            TempList2Hist2 = new double[TempList3.Length][];
+            TempDeltas2 = new double[TempList3.Length][];
+
+            while (X < TempList3.Length)
+            {
+                TempDeltas1 = new double[this.Generator.NeuralNet.Activations[this.Generator.NeuralNet.Activations.Length - 1].Length];
+                TempList1 = new double[this.Generator.NeuralNet.Activations[this.Generator.NeuralNet.Activations.Length - 1].Length];
+                TempList1Hist = new double[this.Generator.NeuralNet.Activations[this.Generator.NeuralNet.Activations.Length - 1].Length];
+                TempList1Hist2 = new double[this.Generator.NeuralNet.Activations[this.Generator.NeuralNet.Activations.Length - 1].Length];
+                Y = 0;
+                while (Y < this.Generator.NeuralNet.Activations[this.Generator.NeuralNet.Activations.Length - 1].Length)
+                {
+                    U1 = 1.0 - Rnd.NextDouble();
+                    U2 = 1.0 - Rnd.NextDouble();
+                    Z1 = 0.125 * (Math.Sqrt(-2.0 * Math.Log(U1)) * Math.Cos(2 * Math.PI * U2));
+
+                    TempList1[Y] = Z1;
+                    TempList1Hist[Y] = 0;
+                    TempList1Hist2[Y] = 0;
+                    TempDeltas1[Y] = 0;
+
+                    Y++;
+                }
+
+                TempList2[X] = TempList1;
+                TempList2Hist[X] = TempList1Hist;
+                TempList2Hist2[X] = TempList1Hist2;
+                TempDeltas2[X] = TempDeltas1;
+
+                X++;
+            }
+
+            this.Generator.TransitionWeights = TempList2;
+            this.Generator.LastTransitionWeights = TempList2Hist;
+            this.Generator.LastTransitionWeights2 = TempList2Hist2;
+            this.Generator.TransitionWeightsDeltas = TempDeltas2;
+        }
+
+
+        public double[][] ExpandVector(double[] Input)
+        {
+            int Dims = (int)Math.Sqrt(Input.Length);
+            double[][] FinalOutput = new double[Dims][];
+            List<List<double>> Output = new List<List<double>>();
+            List<double> SubOutput = new List<double>();
+            double[] SubAry;
+            double[] SubSubAry;
+            int X = 0;
+            int Y = 0;
+            int Z = 0;
+
+
+            //This needs to make an x y grid of rgbs
+            while (Z < Input.Length)
+            {
+                X = 0;
+
+                SubOutput.Add(Input[Z]);
+
+                if ((Z + 1) % Dims == 0 && Z != 0)
+                {
+                    Output.Add(SubOutput);
+                    SubOutput = new List<double>();
+                }
+
+                Z++;
+            }
+
+            FinalOutput = new double[Output.Count][];
+
+            X = 0;
+            while (X < Output.Count)
+            {
+                SubSubAry = new double[Output[X].Count];
+                Y = 0;
+                while (Y < Output[X].Count)
+                {
+                    SubSubAry[Y] = Output[X][Y];
+
+                    Y++;
+                }
+
+                FinalOutput[X] = SubSubAry;
+
+                X++;
+            }
+
+            return FinalOutput;
+        }
+
+        public double[][][] MultiplyMapsByScalar(double[][][] InputMaps, double Scalarval)
         {
             int X = 0;
             int Y = 0;
@@ -946,15 +821,15 @@ namespace MaddoxNET
             double[][] TempList2;
             double[] TempList1;
 
-            while(X < InputMaps.Length)
+            while (X < InputMaps.Length)
             {
                 TempList2 = new double[InputMaps[X].Length][];
                 Y = 0;
-                while(Y < InputMaps[X].Length)
+                while (Y < InputMaps[X].Length)
                 {
                     TempList1 = new double[InputMaps[X][Y].Length];
                     Z = 0;
-                    while(Z < InputMaps[X][Y].Length)
+                    while (Z < InputMaps[X][Y].Length)
                     {
                         TempList1[Z] = InputMaps[X][Y][Z] * Scalarval;
 
@@ -975,349 +850,91 @@ namespace MaddoxNET
             return TempList3;
         }
 
-        public List<List<double>> ExpandVector(List<double> Input)
+        private double[][][] ReshapeTensor(double[] Input, int MapCount)
         {
-            List<List<double>> FinalOutput = new List<List<double>>();
-            List<List<double>> Output = new List<List<double>>();
-            List<double> SubOutput = new List<double>();
+            List<List<double>> TempMap = new List<List<double>>();
+            List<List<List<double>>> Output = new List<List<List<double>>>();
+            List<double> TempList = new List<double>();
+
+            double[][][] FinalOutput;
+            double[][] FinalTempMap;
+            double[] FinalTempList;
+
             int X = 0;
             int Y = 0;
             int Z = 0;
+            int MapDimensions = (int)Math.Sqrt((int)(Input.Length / MapCount));
 
-            //This needs to make an x y grid of rgbs
-            while (Z < Input.Count)
+            while (X < Input.Length)
             {
-                X = 0;
-
-                SubOutput.Add(Input[Z]);
-
-                if((Z+1) % (int)(Math.Sqrt(Input.Count)) == 0 && Z != 0)
+                if (X > 0 && X % MapDimensions == 0)
                 {
-                    FinalOutput.Add(SubOutput);
-                    SubOutput = new List<double>();
+                    TempMap.Add(TempList);
+                    TempList = new List<double>();
                 }
 
-                Z++;
+                if (TempMap.Count > 0 && TempMap.Count % MapDimensions == 0)
+                {
+                    Output.Add(TempMap);
+                    TempMap = new List<List<double>>();
+                }
+
+                TempList.Add(Input[X]);
+
+                X++;
+            }
+
+            while (TempList.Count < MapDimensions)
+            {
+                TempList.Add(0);
+            }
+
+            TempMap.Add(TempList);
+
+            while (TempMap.Count < MapDimensions)
+            {
+                TempList = new List<double>();
+                Y = 0;
+                while (Y < MapDimensions)
+                {
+                    TempList.Add(0);
+
+                    Y++;
+                }
+
+                TempMap.Add(TempList);
+            }
+
+            Output.Add(TempMap);
+
+            FinalOutput = new double[Output.Count][][];
+            X = 0;
+            while (X < Output.Count)
+            {
+                FinalTempMap = new double[Output[X].Count][];
+                Y = 0;
+                while (Y < Output[X].Count)
+                {
+                    FinalTempList = new double[Output[X][Y].Count];
+                    Z = 0;
+                    while (Z < Output[X][Y].Count)
+                    {
+                        FinalTempList[Z] = Output[X][Y][Z];
+
+                        Z++;
+                    }
+
+                    FinalTempMap[Y] = FinalTempList;
+
+                    Y++;
+                }
+
+                FinalOutput[X] = FinalTempMap;
+
+                X++;
             }
 
             return FinalOutput;
         }
-
-        public List<List<double>> InitializeEmpty2DList(int InputValue, int Dimensions)
-        {
-            int X = 0;
-            int Y = 0;
-            List<double> TempList = new List<double>();
-            List<List<double>> RetVal = new List<List<double>>();
-
-            while (X < Dimensions)
-            {
-                TempList = new List<double>();
-                Y = 0;
-                while (Y < Dimensions)
-                {
-                    TempList.Add(InputValue);
-
-                    Y++;
-                }
-
-                RetVal.Add(TempList);
-
-                X++;
-            }
-
-            return RetVal;
-        }
-
-        public List<List<double>> ApplyNoise(List<List<double>> Input,double Limit)
-        {
-            Random Rnd = new Random(System.DateTime.Now.Millisecond * System.DateTime.Now.Second * System.DateTime.Now.Minute);
-            int X = 0;
-            int Y = 0;
-            
-            while(X < Input.Count)
-            {
-                Y = 0;
-                while(Y < Input.Count)
-                {
-                    if(Rnd.Next() % 2 == 0)
-                    {
-                        Input[X][Y] *= 1 + (Rnd.NextDouble() % Limit);
-                        Input[X][Y] %= 0.255;
-                    }
-                    else
-                    {
-                        Input[X][Y] *= (1 - (Rnd.NextDouble() % Limit));
-                        Input[X][Y] %= 0.255;
-                    }
-
-
-                    Y++;
-                }
-
-                X++;
-            }
-
-            return Input;
-        }
-
-        public int CalculateInputCount(int FilterCount,int ImageDims)
-        {
-            List<double> ProcessedInput = new List<double>();
-            List<List<double>> PooledConvs = new List<List<double>>();
-            List<List<double>> Convolution = new List<List<double>>();
-            int X = 0;
-            int Y = 0;
-            int Z = 0;
-            int ZZ = 0;
-            int A = 0;
-            int B = 0;
-            int C = 0;
-            double TempVal = 0;
-            double MaxVal = 0;
-            List<List<double>> NewInput = new List<List<double>>();
-            List<List<double>> FinalOutput = new List<List<double>>();
-            List<double> TempList = new List<double>();
-            List<List<double>> TempList2 = new List<List<double>>();
-            List<List<double>> Input = new List<List<double>>();
-
-
-            //Input = this.ExpandVector(this.GenerateNoiseSample(ImageDims * ImageDims));
-            //this.ConvolutedFeatures = new List<List<List<double>>>();
-
-            while (Z < this.Convolutions)
-            {
-
-
-                ZZ = 0;
-                while (ZZ < FilterCount)
-                {
-                    if (ZZ > 0)
-                    {
-                        Input = FinalOutput;
-                    }
-
-                    FinalOutput = new List<List<double>>();
-                    X = 0;
-                    while (X < Input.Count)
-                    {
-                        TempList = new List<double>();
-                        Y = 0;
-                        while (Y < Input[X].Count)
-                        {
-                            //TempList = new List<double>();
-                            TempVal = 0;
-
-                            TempList.Add((TempVal));
-
-                            Y += 1;
-                        }
-
-                        FinalOutput.Add(TempList);
-
-                        X += 1;
-                    }
-
-
-
-
-                    //FinalOutput = PooledConvs;
-
-                    //this.ConvolutedFeatures.Add(PooledConvs);
-
-                    ZZ++;
-                }
-
-                PooledConvs = new List<List<double>>();
-
-
-                X = 0;
-                while (X < FinalOutput.Count)
-                {
-                    TempList = new List<double>();
-                    Y = 0;
-                    while (Y < FinalOutput[X].Count)
-                    {
-                        MaxVal = FinalOutput[X][Y];
-
-                        //MaxVal /= (this.KernelSize * this.KernelSize);
-                        //TempList.Add(this.ReLU(MaxVal, true));
-                        TempList.Add(MaxVal);
-
-                        //TempList2.Add(TempList);
-                        Y += this.KernelSize;
-
-                    }
-
-
-                    PooledConvs.Add(TempList);
-
-
-                    X += this.KernelSize;
-                }
-
-                FinalOutput = PooledConvs;
-
-                Input = FinalOutput;
-
-                Z++;
-            }
-
-            TempList = this.Flatten2DVector(FinalOutput);
-
-            return TempList.Count;
-        }
-
-        public List<double> Flatten2DVector(List<List<double>> Input)
-        {
-            int X = 0;
-            int Y = 0;
-            List<double> Output = new List<double>();
-
-            while (X < Input.Count)
-            {
-                Y = 0;
-                while (Y < Input[X].Count)
-                {
-                    Output.Add(Input[X][Y]);
-
-                    Y++;
-                }
-
-                X++;
-            }
-
-            return Output;
-        }
-
-        public double[] GenerateNoiseSample1D(int Dimensions)
-        {
-            int X = 0;
-            int Y = 0;
-            List<List<List<double>>> FinalRetVal = new List<List<List<double>>>();
-            List<List<double>> RetVal = new List<List<double>>();
-            double[] TempList = new double[Dimensions];
-            List<double> PixelVals = new List<double>();
-            double U1 = 0;
-            double U2 = 0;
-
-            Rnd = new Random(System.Guid.NewGuid().GetHashCode());
-
-            Y = 0;
-            while (Y < Dimensions)
-            {
-                if(Rnd.Next() % 2 == 0)
-                {
-                    TempList[Y] = Rnd.NextDouble() * -1;
-                }
-                else
-                {
-                    TempList[Y] = Rnd.NextDouble();
-                }
-                
-                
-                
-                Y++;
-            }
-
-            //RetVal.Add(TempList);
-
-            //Rnd = new Random(System.Guid.NewGuid().GetHashCode());
-
-
-            //RetVal = this.Discriminator.ExpandVector(this.Discriminator.NeuralNetwork.NormalizeDataSet(this.Discriminator.Flatten2DVector(RetVal), 4));
-
-            return TempList;
-        }
-
-        public double[][] GenerateNoiseBatch(int Dimensions, int BatchSize)
-        {
-            int X = 0;
-            int Y = 0;
-            double[][] RetVal = new double[BatchSize][];
-            double[] TempList;
-            Random Rnd = new Random(System.Guid.NewGuid().GetHashCode());
-            double U1 = 1.0 - Rnd.NextDouble();
-            double U2 = 1.0 - Rnd.NextDouble();
-            double Z1 = 0;
-            double Mean = 1;
-
-            while (X < BatchSize)
-            {
-                TempList = new double[Dimensions];
-                Y = 0;
-                while (Y < Dimensions)
-                {
-                    U1 = 1.0 - Rnd.NextDouble();
-                    U2 = 1.0 - Rnd.NextDouble();
-                    Z1 = Math.Sqrt(-2.0 * Math.Log(U1)) * Math.Cos(2 * Math.PI * U2);
-                    TempList[Y] = Z1 * 0.01;
-
-                    Y++;
-                }
-
-                RetVal[X] = TempList;
-
-                X++;
-            }
-
-            return RetVal;
-        }
-
-        public double RandDoubleInRange(double Lower, double Upper)
-        {
-            Random Rnd = new Random(System.Guid.NewGuid().GetHashCode());
-            double RetVal = 0;
-            double StdDev = 0.05;
-
-            //return (Math.Sqrt(-2 * Math.Log(Rnd.NextDouble())) * Math.Cos(2 * Math.PI * Rnd.NextDouble())) * StdDev;
-            if(Rnd.Next() % 2 == 0)
-            {
-                return Rnd.NextDouble() * -1;
-            }
-            else
-            {
-                return Rnd.NextDouble();
-            }
-            
-        }
-        public List<List<double>> GenerateNoiseSample(int Dimensions)
-        {
-            int X = 0;
-            int Y = 0;
-            List<List<List<double>>> FinalRetVal = new List<List<List<double>>>();
-            List<List<double>> RetVal = new List<List<double>>();
-            List<double> TempList = new List<double>();
-            List<double> PixelVals = new List<double>();
-            double U1 = 0;
-            double U2 = 0;
-
-            Rnd = new Random(System.Guid.NewGuid().GetHashCode());
-
-            X = 0;
-            while(X < Dimensions)
-            {
-                TempList = new List<double>();
-                Y = 0;
-                while (Y < Dimensions)
-                {
-                   TempList.Add(Rnd.NextDouble());
-
-                    Y++;
-                }
-
-                RetVal.Add(TempList);
-
-                X++;
-            }
-                //Rnd = new Random(System.Guid.NewGuid().GetHashCode());
-
-
-            //RetVal = this.Discriminator.ExpandVector(this.Discriminator.NeuralNetwork.NormalizeDataSet(this.Discriminator.Flatten2DVector(RetVal), 4));
-
-            return RetVal;
-        }
-
-
     }
 }
