@@ -1,0 +1,1039 @@
+using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.Linq;
+using System.Reflection.Emit;
+using System.Text;
+using System.Threading.Tasks;
+using System.Windows.Forms.VisualStyles;
+
+namespace MaddoxNet2
+{
+    public class ANN_Batch
+    {
+        public double[][][] NetInputs;
+        public double[][][] Activations;
+        public double[][][] NormalizedActivations;
+        public double[][][] ScaledActivations;
+        public double[][] ActivationsMean;
+        public double[][] ActivationsVar;
+        public double[][] ActivationsGamma;
+        public double[][] ActivationsGammaMean;
+        public double[][] ActivationsGammaVar;
+        public double[][] ActivationsBeta;
+        public double[][] ActivationsBetaMean;
+        public double[][] ActivationsBetaVar;
+        public double[][][] Derivatives;
+        public double[][][] Errors;
+        public double[][][] Weights;
+        public double[][][] WeightDeltas;
+        public double[][][] LastWeights;
+        public double[][][] LastWeights2;
+        public double LearningRate;
+        public double ReLUConst = 0.2;
+        public int[] ActivationFunctions;
+        public double RMSConst = 0.9;
+        public double B1 = 0.75;
+        public double B2 = 0.999;
+        public int IterationCounter = 1;
+        public int BatchSize = 2;
+
+        public ANN_Batch(int[] LayerShapes, int[] ActivationFuncs, double LearnRate, int BtchSize)
+        {
+            int A = 0;
+            int B = 0;
+            int C = 0;
+            int X = 0;
+            int Q = 0;
+            double[] TempNetInputs;
+            double[] TempActivations;
+            double[] TempDerivatives;
+            double[] TempErrors;
+            double[][] TempErrors2;
+            double[][] TempNetInputs2;
+            double[][] TempActivations2;
+            double[][] TempDerivatives2;
+            double[][] TempWeights2;
+            double[] TempWeights1;
+            double[] TempLastWeights1;
+            double[][] TempLastWeights2;
+            double[] TempLastWeights21;
+            double[][] TempLastWeights22;
+            double[] TempGamma;
+            double[] TempBeta;
+            double[][] TempGamma2;
+            double[][] TempBeta2;
+            double[] TempMean;
+            double[] TempVar;
+            double[] TempGammaMean;
+            double[] TempGammaVar;
+            double[] TempBetaMean;
+            double[] TempBetaVar;
+            double[] TempWeightDeltas1;
+            double[][] TempWeightDeltas2;
+            double[] TempNormalized1;
+            double[][] TempNormalized2;
+            double[] TempScaled1;
+            double[][] TempScaled2;
+            Random Rnd = new Random(System.Guid.NewGuid().GetHashCode());
+
+            this.BatchSize = BtchSize;
+
+            this.LearningRate = LearnRate;
+            this.ActivationFunctions = ActivationFuncs;
+
+
+            this.NetInputs = new double[this.BatchSize][][];
+            this.Activations = new double[this.BatchSize][][];
+            this.Derivatives = new double[this.BatchSize][][];
+            this.Errors = new double[this.BatchSize][][];
+            this.Weights = new double[LayerShapes.Length][][];
+            this.LastWeights = new double[LayerShapes.Length][][];
+            this.LastWeights2 = new double[LayerShapes.Length][][];
+            this.ActivationsGamma = new double[LayerShapes.Length][];
+            this.ActivationsBeta = new double[LayerShapes.Length][];
+            this.ActivationsMean = new double[LayerShapes.Length][];
+            this.ActivationsVar = new double[LayerShapes.Length][];
+            this.ActivationsGammaMean = new double[LayerShapes.Length][];
+            this.ActivationsGammaVar = new double[LayerShapes.Length][];
+            this.ActivationsBetaMean = new double[LayerShapes.Length][];
+            this.ActivationsBetaVar = new double[LayerShapes.Length][];
+            this.WeightDeltas = new double[LayerShapes.Length][][];
+            this.NormalizedActivations = new double[this.BatchSize][][];
+            this.ScaledActivations = new double[this.BatchSize][][];
+
+            while (Q < this.BatchSize)
+            {
+                TempErrors2 = new double[LayerShapes.Length][];
+                TempNetInputs2 = new double[LayerShapes.Length][];
+                TempActivations2 = new double[LayerShapes.Length][];
+                TempDerivatives2 = new double[LayerShapes.Length][];
+                TempNormalized2 = new double[LayerShapes.Length][];
+                TempScaled2 = new double[LayerShapes.Length][];
+
+                A = 0;
+                while (A < LayerShapes.Length)
+                {
+                    TempWeights2 = new double[LayerShapes[A]][];
+                    TempLastWeights2 = new double[LayerShapes[A]][];
+                    TempLastWeights22 = new double[LayerShapes[A]][];
+                    TempGamma = new double[LayerShapes[A]];
+                    TempBeta = new double[LayerShapes[A]];
+                    TempBetaMean = new double[LayerShapes[A]];
+                    TempBetaVar = new double[LayerShapes[A]];
+                    TempGammaMean = new double[LayerShapes[A]];
+                    TempGammaVar = new double[LayerShapes[A]];
+                    TempMean = new double[LayerShapes[A]];
+                    TempVar = new double[LayerShapes[A]];
+                    TempWeightDeltas2 = new double[LayerShapes[A]][];
+
+                    TempNetInputs = new double[LayerShapes[A]];
+                    TempActivations = new double[LayerShapes[A]];
+                    TempDerivatives = new double[LayerShapes[A]];
+                    TempErrors = new double[LayerShapes[A]];
+                    TempNormalized1 = new double[LayerShapes[A]];
+                    TempScaled1 = new double[LayerShapes[A]];
+
+                    B = 0;
+                    while (B < LayerShapes[A])
+                    {
+
+
+
+                        TempNetInputs[B] = 0;
+                        TempActivations[B] = 0;
+                        TempDerivatives[B] = 0;
+                        TempErrors[B] = 0;
+                        TempNormalized1[B] = 0;
+                        TempScaled1[B] = 0;
+
+
+                        TempWeights1 = new double[LayerShapes[Math.Max(0, A - 1)]];
+                        TempLastWeights1 = new double[LayerShapes[Math.Max(0, A - 1)]];
+                        TempLastWeights21 = new double[LayerShapes[Math.Max(0, A - 1)]];
+                        TempWeightDeltas1 = new double[LayerShapes[Math.Max(0, A - 1)]];
+
+                        C = 0;
+                        while (C < LayerShapes[Math.Max(0, A - 1)])
+                        {
+                            TempWeights1[C] = (Rnd.NextDouble() * 2.0 - 1.0) * 0.001;
+                            TempLastWeights1[C] = 0;
+                            TempLastWeights21[C] = 0;
+                            TempWeightDeltas1[C] = 0;
+
+                            C++;
+                        }
+
+                        TempMean[B] = 0;
+                        TempVar[B] = 1;
+                        TempWeights2[B] = TempWeights1;
+                        TempLastWeights2[B] = TempLastWeights1;
+                        TempLastWeights22[B] = TempLastWeights21;
+                        TempGamma[B] = 1;
+                        TempBeta[B] = 0;
+                        TempGammaMean[B] = 0;
+                        TempGammaVar[B] = 0;
+                        TempBetaMean[B] = 0;
+                        TempBetaVar[B] = 0;
+                        TempWeightDeltas2[B] = TempWeightDeltas1;
+
+
+
+                        B++;
+                    }
+
+                    TempErrors2[A] = TempErrors;
+                    TempNetInputs2[A] = TempNetInputs;
+                    TempActivations2[A] = TempActivations;
+                    TempDerivatives2[A] = TempDerivatives;
+                    TempNormalized2[A] = TempNormalized1;
+                    TempScaled2[A] = TempScaled1;
+
+                    this.Weights[A] = TempWeights2;
+                    this.LastWeights[A] = TempLastWeights2;
+                    this.LastWeights2[A] = TempLastWeights22;
+                    this.ActivationsMean[A] = TempMean;
+                    this.ActivationsVar[A] = TempVar;
+                    this.ActivationsGamma[A] = TempGamma;
+                    this.ActivationsBeta[A] = TempBeta;
+                    this.ActivationsGammaMean[A] = TempGammaMean;
+                    this.ActivationsGammaVar[A] = TempGammaVar;
+                    this.ActivationsBetaMean[A] = TempBetaMean;
+                    this.ActivationsBetaVar[A] = TempBetaVar;
+                    this.WeightDeltas[A] = TempWeightDeltas2;
+
+                    A++;
+                }
+
+                this.Errors[Q] = TempErrors2;
+                this.NetInputs[Q] = TempNetInputs2;
+                this.Activations[Q] = TempActivations2;
+                this.Derivatives[Q] = TempDerivatives2;
+                this.NormalizedActivations[Q] = TempNormalized2;
+                this.ScaledActivations[Q] = TempScaled2;
+
+                Q++;
+            }
+
+
+            this.XavierInitialize(1.0);
+
+        }
+
+        public void XavierInitialize(double Mean)
+        {
+            int X = 1;
+            int Y = 0;
+            int Z = 0;
+            double Limit;
+            double TempVal = 0;
+            Random Rnd = new Random(System.Guid.NewGuid().GetHashCode());
+
+            while (X < this.Weights.Length)
+            {
+                Limit = Math.Sqrt(2.0 / (this.Activations[0][X - 1].Length + this.Activations[0][X].Length));
+                Y = 0;
+                while (Y < this.Weights[X].Length)
+                {
+                    Z = 0;
+                    while (Z < this.Weights[X][Y].Length)
+                    {
+                        TempVal = Limit * (Rnd.NextDouble() * 2.0 - 1.0);
+                        this.Weights[X][Y][Z] = TempVal * Mean;
+
+                        Z++;
+                    }
+
+                    Y++;
+                }
+
+                X++;
+            }
+        }
+
+
+        public void ScaleAndShift(int LayerID)
+        {
+            int A = 0;
+            int B = 0;
+
+            if (this.ActivationFunctions[LayerID] == 0)
+            {
+                while (A < this.NetInputs[0][LayerID].Length)
+                {
+                    B = 0;
+                    while (B < this.NetInputs.Length)
+                    {
+                        this.ScaledActivations[B][LayerID][A] = this.NormalizedActivations[B][LayerID][A];
+
+                        B++;
+                    }
+
+                    A++;
+                }
+
+                return;
+            }
+
+            while (A < this.NetInputs[0][LayerID].Length)
+            {
+                B = 0;
+                while (B < this.NetInputs.Length)
+                {
+                    this.ScaledActivations[B][LayerID][A] = this.NormalizedActivations[B][LayerID][A] * this.ActivationsGamma[LayerID][A] + this.ActivationsBeta[LayerID][A];
+
+                    B++;
+                }
+
+                A++;
+            }
+        }
+
+        public void ForwardPropagate(double[][] Inputs, bool Inference)
+        {
+            int A = 0;
+            int B = 0;
+            int C = 0;
+            int Q = 0;
+            double[] NetSums;
+            double NetSum = 0;
+
+            A = 0;
+            while (A < Inputs[0].Length)
+            {
+                Q = 0;
+                while (Q < Inputs.Length)
+                {
+                    this.NetInputs[Q][0][A] = Inputs[Q][A];
+
+                    Q++;
+                }
+
+                A++;
+            }
+
+            //this.NormalizeLayer(0, Inference);
+            //this.ScaleAndShift(0);
+            this.ActivateLayer(0);
+            this.DerivativesLayer(0);
+
+
+            A = 1;
+            while (A < this.NetInputs[0].Length)
+            {
+
+                B = 0;
+                while (B < this.NetInputs[0][A].Length)
+                {
+                    NetSums = new double[Inputs.Length];
+                    NetSum = 0;
+                    Q = 0;
+                    while (Q < Inputs.Length)
+                    {
+                        C = 0;
+                        while (C < this.NetInputs[0][A - 1].Length)
+                        {
+
+                            NetSums[Q] += (this.Weights[A][B][C] * this.Activations[Q][A - 1][C]);
+
+
+                            C++;
+                        }
+
+
+                        Q++;
+                    }
+
+                    Q = 0;
+                    while (Q < Inputs.Length)
+                    {
+                        this.NetInputs[Q][A][B] = NetSums[Q];
+
+                        Q++;
+                    }
+
+
+                    B++;
+                }
+
+
+
+
+                //this.NormalizeLayer(A, Inference);
+                //this.ScaleAndShift(A);
+                this.ActivateLayer(A);
+                this.DerivativesLayer(A);
+
+                A++;
+            }
+        }
+
+        public void ActivateLayer(int LayerID)
+        {
+            int X = 0;
+            int Q = 0;
+            double TempVal = 0;
+
+            while (Q < this.NetInputs.Length)
+            {
+                X = 0;
+                while (X < this.NetInputs[Q][LayerID].Length)
+                {
+                    switch (this.ActivationFunctions[LayerID])
+                    {
+                        //TanH
+                        case 0:
+                            TempVal = Math.Tanh(this.NetInputs[Q][LayerID][X]);
+
+                            break;
+                        //Sigmoid
+                        case 1:
+                            TempVal = 1 / (1 + Math.Pow(Math.E, -1 * this.NetInputs[Q][LayerID][X]));
+
+                            break;
+                        case 2:
+                            if (this.NetInputs[Q][LayerID][X] >= 0)
+                            {
+                                TempVal = this.NetInputs[Q][LayerID][X];
+                            }
+                            else
+                            {
+                                TempVal = (Math.Exp(this.NetInputs[Q][LayerID][X]) - 1.0);
+                            }
+                            break;
+                        //ReLU
+                        case 3:
+                            if (this.NetInputs[Q][LayerID][X] >= 0)
+                            {
+                                TempVal = this.NetInputs[Q][LayerID][X];
+                            }
+                            else
+                            {
+                                TempVal = this.ReLUConst * this.NetInputs[Q][LayerID][X];
+                            }
+
+                            break;
+                        //Swish
+                        case 4:
+                            TempVal = this.NetInputs[Q][LayerID][X] * this.ActivationFunction(this.NetInputs[Q][LayerID][X], 1);
+                            break;
+                        case 9:
+                            TempVal = this.NetInputs[Q][LayerID][X];
+                            break;
+                    }
+
+                    this.Activations[Q][LayerID][X] = TempVal;
+
+                    X++;
+                }
+
+                Q++;
+            }
+
+        }
+
+        public void DerivativesLayer(int LayerID)
+        {
+            int X = 0;
+            int Q = 0;
+            double TempVal = 0;
+
+            while (Q < this.NetInputs.Length)
+            {
+                X = 0;
+                while (X < this.NetInputs[Q][LayerID].Length)
+                {
+                    switch (this.ActivationFunctions[LayerID])
+                    {
+                        //TanH
+                        case 0:
+                            TempVal = Math.Tanh(this.NetInputs[Q][LayerID][X]);
+                            TempVal = (1.0 - (TempVal * TempVal));
+
+                            break;
+                        //Sigmoid
+                        case 1:
+                            TempVal = this.ActivationFunction(this.NetInputs[Q][LayerID][X], 1);
+                            TempVal = TempVal * (1 - TempVal);
+
+                            break;
+                        case 2:
+                            if (this.NetInputs[Q][LayerID][X] >= 0)
+                            {
+                                TempVal = 1;
+                            }
+                            else
+                            {
+                                TempVal = Math.Exp(this.NetInputs[Q][LayerID][X]);
+                            }
+
+                            break;
+                        //ReLU
+                        case 3:
+                            if (this.NetInputs[Q][LayerID][X] >= 0)
+                            {
+                                TempVal = 1;
+                            }
+                            else
+                            {
+                                //TempVal = 0;
+                                TempVal = this.ReLUConst;
+                            }
+
+                            break;
+                        //Swish
+                        case 4:
+                            TempVal = ActivationFunction(this.NetInputs[Q][LayerID][X], 1);
+                            TempVal = TempVal + this.NetInputs[Q][LayerID][X] * TempVal * (1.0 - TempVal);
+
+                            break;
+                        case 9:
+                            TempVal = this.NetInputs[Q][LayerID][X];
+                            break;
+                    }
+
+                    this.Derivatives[Q][LayerID][X] = TempVal;
+
+                    X++;
+                }
+
+                Q++;
+            }
+
+        }
+
+        public void NormalizeLayer(int LayerID, bool Inference)
+        {
+            int A = 0;
+            int B = 0;
+            double Momentum = 0.5;
+            double TempVal = 0;
+            double[] Mean = new double[this.NetInputs[0][LayerID].Length];
+            double[] Variance = new double[this.NetInputs[0][LayerID].Length];
+
+            if (this.ActivationFunctions[LayerID] != 2)
+            {
+                A = 0;
+                while (A < this.NetInputs.Length)
+                {
+                    B = 0;
+                    while (B < this.NetInputs[A][LayerID].Length)
+                    {
+                        this.NormalizedActivations[A][LayerID][B] = (this.NetInputs[A][LayerID][B]);
+
+                        B++;
+                    }
+
+                    A++;
+                }
+
+                return;
+            }
+
+            if (!Inference)
+            {
+                A = 0;
+                while (A < this.NetInputs[0][LayerID].Length)
+                {
+                    TempVal = 0;
+                    B = 0;
+                    while (B < this.NetInputs.Length)
+                    {
+                        TempVal += this.NetInputs[B][LayerID][A];
+
+                        B++;
+                    }
+
+                    TempVal /= this.NetInputs.Length;
+
+                    Mean[A] = TempVal;
+
+                    A++;
+                }
+
+                A = 0;
+                while (A < this.NetInputs[0][LayerID].Length)
+                {
+                    TempVal = 0;
+                    B = 0;
+                    while (B < this.NetInputs.Length)
+                    {
+                        TempVal += Math.Pow(this.NetInputs[B][LayerID][A] - Mean[A], 2);
+
+                        B++;
+                    }
+
+                    TempVal /= this.NetInputs.Length;
+
+                    Variance[A] = TempVal;
+
+                    A++;
+                }
+
+
+                B = 0;
+                while (B < this.NetInputs[0][LayerID].Length)
+                {
+                    A = 0;
+                    while (A < this.NetInputs.Length)
+                    {
+                        this.NormalizedActivations[A][LayerID][B] = (this.NetInputs[A][LayerID][B] - Mean[B]) / (Math.Sqrt(Variance[B]));
+
+                        A++;
+                    }
+
+                    this.ActivationsMean[LayerID][B] = (1.0 - Momentum) * this.ActivationsMean[LayerID][B] + (Momentum) * Mean[B];
+                    this.ActivationsVar[LayerID][B] = (1.0 - Momentum) * this.ActivationsVar[LayerID][B] + (Momentum) * Variance[B];
+
+                    B++;
+                }
+
+            }
+            else
+            {
+                Mean = this.ActivationsMean[LayerID];
+                Variance = this.ActivationsVar[LayerID];
+
+                A = 0;
+                while (A < this.NetInputs.Length)
+                {
+                    B = 0;
+                    while (B < this.NetInputs[A][LayerID].Length)
+                    {
+                        this.NormalizedActivations[A][LayerID][B] = (this.NetInputs[A][LayerID][B] - Mean[B]) / (Math.Sqrt(Variance[B]));
+
+                        B++;
+                    }
+
+                    A++;
+                }
+            }
+
+        }
+
+        public async void BackPropagate(double[][] Inputs, double[][] Outputs, int OptimizerID, bool TrainWeights = true, bool IsGenerator = false)
+        {
+            int A = 0;
+            int B = 0;
+            int C = 0;
+            int Z = 0;
+            double[] BatchLoss;
+            double Delta;
+            double TempVal = 0;
+            double[] TempVals;
+            double MeanDelta = 0;
+            double VarDelta = 0;
+            int Counter = 0;
+            double TruthLabel = 0;
+            double B1Corrected = 0;
+            double B2Corrected = 0;
+
+            if (!IsGenerator)
+            {
+                this.ForwardPropagate(Inputs, false);
+            }
+
+
+
+            C = 0;
+            while (C < Inputs.Length)
+            {
+                Counter = 0;
+                A = 0;
+                while (A < this.Activations[C][this.Activations[0].Length - 1].Length)
+                {
+
+
+                    if (IsGenerator)
+                    {
+                        this.Errors[C][this.Errors[0].Length - 1][A] = (Outputs[C][A] * this.Derivatives[C][this.Derivatives[C].Length - 1][A]);
+                    }
+                    else
+                    {
+                        if (TrainWeights)
+                        {
+                            this.Errors[C][this.Errors[0].Length - 1][A] = ((0.5 * (this.Activations[C][this.Activations[0].Length - 1][A] - Outputs[C][A])) * (this.Derivatives[C][this.Derivatives[0].Length - 1][A]));
+
+
+                            //if (Outputs[C][0] == 1)
+                            //{
+                            //    this.Errors[C][this.Errors[C].Length - 1][A] = (-1.0 / (this.Activations[C][this.Activations[C].Length - 1][A]) * this.Derivatives[C][this.Derivatives[C].Length - 1][A]);
+                            //}
+                            //else
+                            //{
+                            //    this.Errors[C][this.Errors[C].Length - 1][A] = (1.0 / (1.0 - this.Activations[C][this.Activations[C].Length - 1][A] + 0.000000001) * this.Derivatives[C][this.Derivatives[C].Length - 1][A]);
+                            //}
+                        }
+                        else
+                        {
+                            this.Errors[C][this.Errors[0].Length - 1][A] = ((-1.0 / (this.Activations[C][this.Activations[C].Length - 1][A]) * this.Derivatives[C][this.Derivatives[0].Length - 1][A]));
+                        }
+
+
+                    }
+
+
+
+                    B = 0;
+                    while (B < this.Weights[this.Weights.Length - 1][A].Length)
+                    {
+                        if (TrainWeights)
+                        {
+                            switch (OptimizerID)
+                            {
+                                case 0:
+                                    TempVal = (this.LearningRate * (this.Errors[this.Errors.Length - 1][A][C] * this.Activations[this.Activations.Length - 2][B][C]));
+                                    this.Weights[this.Weights.Length - 1][A][B] -= (TempVal);
+                                    //this.LastWeights[this.LastWeights.Length - 1][A][B] = TempVal;
+
+                                    break;
+                                case 1:
+                                    if (this.Activations.Length == 1)
+                                    {
+                                        Delta = (this.Errors[this.Errors[0].Length - 1][A][C] * Inputs[A][C]);
+                                    }
+                                    else
+                                    {
+                                        Delta = (this.Errors[this.Errors[C].Length - 1][A][C] * this.Activations[this.Activations.Length - 2][B][C]);
+                                    }
+                                    this.LastWeights[this.LastWeights.Length - 1][A][B] = (this.B1 * this.LastWeights[this.LastWeights.Length - 1][A][B] + (1.0 - this.B1) * (Math.Pow((Delta), 2)));
+                                    this.Weights[this.Weights.Length - 1][A][B] -= (this.LearningRate * (Delta) / Math.Sqrt(this.LastWeights[this.LastWeights.Length - 1][A][B] + 0.000000001));
+
+                                    break;
+                                case 2:
+                                    if (this.Activations[C].Length == 1)
+                                    {
+                                        Delta = (this.Errors[C][this.Errors[C].Length - 1][A] * Inputs[C][A]);
+                                    }
+                                    else
+                                    {
+                                        Delta = (this.Errors[C][this.Errors[C].Length - 1][A] * this.Activations[C][this.Activations[C].Length - 2][B]);
+                                    }
+
+                                    this.LastWeights[this.LastWeights.Length - 1][A][B] = (this.B1 * this.LastWeights[this.LastWeights.Length - 1][A][B] + (1.0 - this.B1) * Delta);// / (1.0 - Math.Pow(this.B1, this.IterationCounter));
+                                    B1Corrected = this.LastWeights[this.LastWeights.Length - 1][A][B] / (1.0 - Math.Pow(this.B1, this.IterationCounter));
+
+                                    this.LastWeights2[this.LastWeights2.Length - 1][A][B] = (this.B2 * this.LastWeights2[this.LastWeights2.Length - 1][A][B] + (1.0 - this.B2) * Math.Pow(Delta, 2));// / (1.0 - Math.Pow(this.B2, this.IterationCounter));                                
+                                    B2Corrected = this.LastWeights2[this.LastWeights.Length - 1][A][B] / (1.0 - Math.Pow(this.B2, this.IterationCounter));
+
+                                    TempVal = this.LearningRate * (B1Corrected / (Math.Sqrt(B2Corrected + 0.00000001)));
+                                    this.WeightDeltas[this.LastWeights.Length - 1][A][B] += TempVal;
+                                    //this.LastWeights[this.Weights.Length - 1][A][B] += Delta;
+
+                                    break;
+                            }
+                        }
+
+                        B++;
+                    }
+
+                    Counter++;
+
+                    A++;
+                }
+
+
+                A = this.Activations[C].Length - 2;
+                while (A >= 0)
+                {
+                    TempVals = new double[this.BatchSize];
+
+                    TempVal = 0;
+                    B = 0;
+                    while (B < this.Activations[C][A].Length)
+                    {
+                        TempVal = 0;
+                        Z = 0;
+                        while (Z < this.Activations[C][A + 1].Length)
+                        {
+                            TempVal += (this.Errors[C][A + 1][Z] * this.Weights[A + 1][Z][B]);
+
+                            Z++;
+                        }
+
+                        this.Errors[C][A][B] = TempVal * this.Derivatives[C][A][B];
+
+                        //this.ActivationsGamma[A][B] -= (this.LearningRate * (this.Errors[A][B][Z] * this.Activations[A][B][Z]));
+                        //this.ActivationsBeta[A][B] -= (this.LearningRate * this.Errors[A][B][Z]);
+
+
+                        B++;
+                    }
+
+                    //Get net sum of error input signals
+
+
+                    if (A > 0)
+                    {
+                        B = 0;
+                        while (B < this.Activations[C][A].Length)
+                        {
+                            Z = 0;
+                            while (Z < this.Activations[C][A - 1].Length)
+                            {
+                                if (TrainWeights)
+                                {
+                                    switch (OptimizerID)
+                                    {
+                                        case 0:
+                                            TempVal = (this.LearningRate * (this.Errors[A][B][Z] * this.Activations[A - 1][C][Z]));
+                                            this.Weights[A][B][C] -= (TempVal);
+                                            //this.LastWeights[A][B][C] = TempVal;
+
+                                            break;
+                                        case 1:
+                                            this.LastWeights[A][B][Z] = (this.B1 * this.LastWeights[A][B][Z] + (1.0 - this.B1) * (Math.Pow((this.Errors[C][A][B] * this.Activations[C][A - 1][Z]), 2)));
+                                            this.Weights[A][B][Z] -= (this.LearningRate * (this.Errors[C][A][B] * this.Activations[C][A - 1][Z]) / Math.Sqrt(this.LastWeights[A][B][Z] + 0.000000001));
+
+
+
+                                            break;
+                                        case 2:
+                                            this.LastWeights[A][B][Z] = (this.B1 * this.LastWeights[A][B][Z] + (1.0 - this.B1) * (this.Errors[C][A][B] * this.Activations[C][A - 1][Z]));// / (1.0 - Math.Pow(this.B1, this.IterationCounter));
+                                            B1Corrected = this.LastWeights[A][B][Z] / (1.0 - Math.Pow(this.B1, this.IterationCounter));
+
+                                            this.LastWeights2[A][B][Z] = (this.B2 * this.LastWeights2[A][B][Z] + (1.0 - this.B2) * Math.Pow(this.Errors[C][A][B] * this.Activations[C][A - 1][Z], 2));// / (1.0 - Math.Pow(this.B2, this.IterationCounter));
+                                            B2Corrected = this.LastWeights2[A][B][Z] / (1.0 - Math.Pow(this.B2, this.IterationCounter));
+
+                                            TempVal = this.LearningRate * (B1Corrected / (Math.Sqrt(B2Corrected + 0.00000001)));
+                                            this.WeightDeltas[A][B][Z] += TempVal;
+
+
+
+                                            break;
+                                    }
+                                }
+
+                                Z++;
+                            }
+
+                            B++;
+                        }
+                    }
+
+                    A--;
+                }
+
+                C++;
+            }
+
+            if (TrainWeights)
+            {
+                this.ApplyGradients();
+                this.UpdateBetaAndGamma();
+            }
+
+            this.IterationCounter++;
+        }
+
+        public int GetActivationIndex()
+        {
+            int MaxIndex = 0;
+            double MaxVal = this.Activations[0][this.Activations[0].Length - 1][0];
+            int X = 0;
+
+            while (X < this.Activations[this.Activations.Length - 1].Length)
+            {
+                if (this.Activations[0][this.Activations[0].Length - 1][X] > MaxVal)
+                {
+                    MaxIndex = X;
+                    MaxVal = this.Activations[0][this.Activations[0].Length - 1][X];
+                }
+
+                X++;
+            }
+
+            return MaxIndex;
+        }
+
+        public void ApplyGradients()
+        {
+            int X = 1;
+            int Y = 0;
+            int Z = 0;
+
+            while (X < this.LastWeights.Length)
+            {
+                Y = 0;
+                while (Y < this.LastWeights[X].Length)
+                {
+                    Z = 0;
+                    while (Z < this.LastWeights[X][Y].Length)
+                    {
+                        this.Weights[X][Y][Z] -= this.WeightDeltas[X][Y][Z];
+                        this.WeightDeltas[X][Y][Z] = 0;
+
+                        Z++;
+                    }
+
+
+                    Y++;
+                }
+
+                X++;
+            }
+        }
+
+        public void UpdateBetaAndGamma()
+        {
+            int A = 0;
+            int X = 0;
+            int Y = 0;
+            int Z = 0;
+            int Q = 0;
+            double Delta = 0;
+
+            Q = 0;
+            while (Q < this.Activations.Length)
+            {
+                A = 0;
+                while (A < this.ActivationsGamma.Length)
+                {
+                    X = 0;
+                    while (X < this.ActivationsGamma[A].Length)
+                    {
+                        Delta = this.Errors[Q][A][X] * this.NormalizedActivations[Q][A][X];
+                        this.ActivationsGammaMean[A][X] = (this.B1 * this.ActivationsGammaMean[A][X] + (1.0 - this.B1) * Delta);
+                        this.ActivationsGammaVar[A][X] = (this.B2 * this.ActivationsGammaVar[A][X] + (1.0 - this.B2) * Math.Pow(Delta, 2));
+                        this.ActivationsGamma[A][X] -= (this.LearningRate * (this.ActivationsGammaMean[A][X] / (Math.Sqrt(this.ActivationsGammaVar[A][X] + 0.0000001))));
+
+                        //this.ActivationsGammaVar[A][X] = (this.B1 * this.ActivationsGammaVar[A][X] + (1.0 - this.B1) * Math.Pow(Delta, 2));
+                        //this.ActivationsGamma[A][X] -= (this.LearningRate * Delta / (Math.Sqrt(this.ActivationsGammaVar[A][X]) + 0.0000000001));
+                        //this.ActivationsGamma[A][X] -= (this.LearningRate * Delta);
+
+                        Delta = this.Errors[Q][A][X];
+                        this.ActivationsBetaMean[A][X] = (this.B1 * this.ActivationsBetaMean[A][X] + (1.0 - this.B1) * Delta);
+                        this.ActivationsBetaVar[A][X] = (this.B2 * this.ActivationsBetaVar[A][X] + (1.0 - this.B2) * Math.Pow(Delta, 2));
+                        this.ActivationsBeta[A][X] -= (this.LearningRate * (this.ActivationsBetaMean[A][X] / (Math.Sqrt(this.ActivationsBetaVar[A][X] + 0.0000001))));
+
+                        //this.ActivationsBetaVar[A][X] = (this.B1 * this.ActivationsBetaVar[A][X] + (1.0 - this.B1) * Math.Pow(Delta, 2));
+                        //this.ActivationsBeta[A][X] -= (this.LearningRate * Delta / (Math.Sqrt(this.ActivationsBetaVar[A][X]) + 0.0000000001));
+                        //this.ActivationsBeta[A][X] -= (this.LearningRate * Delta);
+
+
+
+                        X++;
+                    }
+
+                    A++;
+                }
+
+                Q++;
+            }
+
+        }
+
+        public double ActivationFunction(double Input, int ActivationFunctionID)
+        {
+            double TempVal = 0.0f;
+            int X = 0;
+
+            switch (ActivationFunctionID)
+            {
+                //TanH
+                case 0:
+                    TempVal = Math.Tanh(Input);
+
+                    break;
+                //Sigmoid
+                case 1:
+                    TempVal = 1 / (1 + Math.Pow(Math.E, -1 * Input));
+
+                    break;
+                case 2:
+                    if (Input >= 0)
+                    {
+                        TempVal = Input;
+                    }
+                    else
+                    {
+                        TempVal = (Math.Exp(Input) - 1.0);
+                    }
+                    break;
+                //ReLU
+                case 3:
+                    if (Input >= 0)
+                    {
+                        TempVal = Input;
+                    }
+                    else
+                    {
+                        TempVal = this.ReLUConst * Input;
+                    }
+
+                    break;
+                //Swish
+                case 4:
+                    TempVal = Input * this.ActivationFunction(Input, 1);
+                    break;
+                case 9:
+                    TempVal = Input;
+                    break;
+            }
+
+            if (double.IsNaN(TempVal) || double.IsInfinity(TempVal))
+            {
+                Debug.Print("WARNING: NaN activation detected in network!");
+            }
+
+            return TempVal;
+        }
+
+        public double ActivationFunctionDerivative(double Input, int ActivationFunctionID)
+        {
+            double TempVal = 0.0f;
+
+            switch (ActivationFunctionID)
+            {
+                //TanH
+                case 0:
+                    TempVal = Math.Tanh(Input);
+                    TempVal = (1.0 - (TempVal * TempVal));
+
+                    break;
+                //Sigmoid
+                case 1:
+                    TempVal = this.ActivationFunction(Input, 1);
+                    TempVal = TempVal * (1 - TempVal);
+
+                    break;
+                case 2:
+                    if (Input >= 0)
+                    {
+                        TempVal = 1;
+                    }
+                    else
+                    {
+                        TempVal = Math.Exp(Input);
+                    }
+
+                    break;
+                //ReLU
+                case 3:
+                    if (Input >= 0)
+                    {
+                        TempVal = 1;
+                    }
+                    else
+                    {
+                        //TempVal = 0;
+                        TempVal = this.ReLUConst;
+                    }
+
+                    break;
+                //Swish
+                case 4:
+                    TempVal = ActivationFunction(Input, 1);
+                    TempVal = TempVal + Input * TempVal * (1.0 - TempVal);
+
+                    break;
+                case 9:
+                    TempVal = Input;
+                    break;
+            }
+
+            return TempVal;
+        }
+    }
+}
+
