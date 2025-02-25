@@ -492,6 +492,73 @@ namespace MaddoxNet2
             }
         }
 
+        public void UpdateBatchMomentum()
+        {
+            int A = 0;
+            int B = 0;
+            int C = 0;
+            int D = 0;
+            int E = 0;
+            double Delta = 0;
+            double Delta2 = 0;
+            double B1Corrected = 0;
+            double B2Corrected = 0;
+
+            while(A < this.ErrorMaps[0].Length)
+            {
+                Delta = 0;
+                B = 0;
+                while(B < this.ErrorMaps[0][A].Length)
+                {
+                    C = 0;
+                    while(C < this.ErrorMaps[0][A][B].Length)
+                    {
+                        D = 0;
+                        while(D < this.ErrorMaps[0][A][B][C].Length)
+                        {
+                            E = 0;
+                            while (E < this.ErrorMaps.Length)
+                            {
+                                if (this.ActivationFunctions[A] == 2)
+                                {
+                                    Delta += (this.ErrorMaps[E][A][B][C][D] * (-1.0 / Math.Sqrt(this.InstanceNormVar[A][B][C][D] + 0.000000001))) * (this.BatchMean[A][B][C][D] - this.InstanceNormMean[A][B][C][D]);
+                                    Delta2 += (this.ErrorMaps[E][A][B][C][D] * (-(this.NetFeatureMaps[E][A][B][C][D] - this.InstanceNormMean[A][B][C][D]) / Math.Pow((2.0 * (this.InstanceNormVar[A][B][C][D] + 0.000000001)), 1.5))) * (this.BatchVar[A][B][C][D] - this.InstanceNormVar[A][B][C][D]);
+                                }
+
+                                E++;
+                            }
+
+                            D++;
+                        }
+
+                        C++;
+                    }
+
+                    B++;
+                }
+
+                if (this.ActivationFunctions[A] == 2)
+                {
+                    Delta += Delta2;
+
+                    this.LayerBatchMomentumADAM1[A] = (this.NeuralNet.B1 * this.LayerBatchMomentumADAM1[A] + (1.0 - this.NeuralNet.B1) * Delta);
+                    B1Corrected = this.LayerBatchMomentumADAM1[A] / (1.0 - Math.Pow(this.NeuralNet.B1, this.IterationCounter));
+
+                    this.LayerBatchMomentumADAM2[A] = (this.NeuralNet.B2 * this.LayerBatchMomentumADAM2[A] + (1.0 - this.NeuralNet.B2) * Math.Pow(Delta, 2));
+                    B2Corrected = this.LayerBatchMomentumADAM2[A] / (1.0 - Math.Pow(this.NeuralNet.B2, this.IterationCounter));
+
+                    Delta = this.NeuralNet.LearningRate * (B1Corrected / (Math.Sqrt(B2Corrected + 0.000000001)));
+
+                    this.LayerBatchMomentum[A] -= Delta;
+
+                    this.LayerBatchMomentum[A] = Math.Min(Math.Max(0.001, this.LayerBatchMomentum[A]), 0.999);
+                }
+                
+
+                A++;
+            }
+        }
+
         public void NormalizeLayer(int LayerID, bool Inference = false)
         {
             double[][][][] Output = this.CreateEmptyMapListBatch(this.NetFeatureMaps[0][LayerID][0].Length, this.NetFeatureMaps[0][LayerID].Length, this.NetFeatureMaps.Length);
