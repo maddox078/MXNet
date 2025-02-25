@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using System.Xml.Schema;
 using System.Threading.Tasks;
 using System.Diagnostics;
+using System.CodeDom.Compiler;
 
 namespace MaddoxNet2
 {
@@ -40,6 +41,11 @@ namespace MaddoxNet2
         public int[] PoolingSchedule;
         public int[] FilterDimSchedule;
         public int[] ActivationFunctions;
+        public double[] LayerBatchMomentum;
+        public double[] LayerBatchMomentumADAM1;
+        public double[] LayerBatchMomentumADAM2;
+        public double[][][][] BatchMean;
+        public double[][][][] BatchVar;        
         public int BatchSize = 2;
         public int IterationCounter = 1;
         public double InstanceNormMomentum = 0.9;
@@ -150,6 +156,11 @@ namespace MaddoxNet2
             this.LastInstanceNormGamma2 = new double[FilterCounts.Length][][][];
             this.ScaledFeatureMaps = new double[this.BatchSize][][][][];
             this.GradientsWRTInputs = new double[this.BatchSize][][][];
+            this.LayerBatchMomentum = new double[FilterCounts.Length];
+            this.BatchMean = new double[FilterCounts.Length][][][];
+            this.BatchVar = new double[FilterCounts.Length][][][];
+            this.LayerBatchMomentumADAM1 = new double[FilterCounts.Length];
+            this.LayerBatchMomentumADAM2 = new double[FilterCounts.Length];
 
             //TempImageDims = Math.Floor((double)((ImageDims - FilterDims[0] + 2 * ((FilterDims[0] - 1) / 2.0)) / this.PoolingSchedule[0]) + 1);
 
@@ -159,7 +170,7 @@ namespace MaddoxNet2
             Q = 0;
             while (Q < this.BatchSize)
             {
-                this.LayerPadding[0] = (FilterDims[0]) / 2.0;
+                this.LayerPadding[0] = (FilterDims[0] - 1.0) / 2.0;
                 TempImageDims = Math.Floor(((ImageDims - FilterDims[0] + 2.0 * this.LayerPadding[0]) / PoolingSchedule[0]) + 1);
 
                 TempFeatureMaps4 = new double[FilterCounts.Length][][][];
@@ -361,7 +372,7 @@ namespace MaddoxNet2
 
                     if (A + 1 < FilterCounts.Length)
                     {
-                        this.LayerPadding[A + 1] = (FilterDims[A + 1]) / 2.0;
+                        this.LayerPadding[A + 1] = (FilterDims[A+1] - 1.0) / 2.0;
                         TempImageDims = Math.Floor(((TempImageDims - FilterDims[A + 1] + 2.0 * this.LayerPadding[A + 1]) / PoolingSchedule[A + 1]) + 1);
                     }
 
@@ -459,7 +470,7 @@ namespace MaddoxNet2
         }
 
 
-        public void ScaleAndShiftLayer(int LayerID)
+        public void ScaleAndShiftLayer(int LayerID, int TrueBatchSize)
         {
             int A = 0;
             int B = 0;
@@ -475,9 +486,18 @@ namespace MaddoxNet2
                     while (C < this.NetFeatureMaps[0][LayerID][A][B].Length)
                     {
                         D = 0;
-                        while (D < this.NetFeatureMaps.Length)
+                        while (D < TrueBatchSize)
                         {
-                            this.ScaledFeatureMaps[D][LayerID][A][B][C] = this.NormalizedFeatureMaps[D][LayerID][A][B][C] * this.InstanceNormGamma[LayerID][A][B][C] + this.InstanceNormBeta[LayerID][A][B][C];
+                            if (this.ActivationFunctions[LayerID] == 2)
+                            {
+                                this.ScaledFeatureMaps[D][LayerID][A][B][C] = this.NormalizedFeatureMaps[D][LayerID][A][B][C] * this.InstanceNormGamma[LayerID][A][B][C] + this.InstanceNormBeta[LayerID][A][B][C];
+                            }
+
+
+                            if (double.IsNaN(this.ScaledFeatureMaps[D][LayerID][A][B][C]))
+                            {
+                                break;
+                            }
 
                             D++;
                         }
@@ -523,6 +543,11 @@ namespace MaddoxNet2
                                 {
                                     Delta += (this.ErrorMaps[E][A][B][C][D] * (-1.0 / Math.Sqrt(this.InstanceNormVar[A][B][C][D] + 0.000000001))) * (this.BatchMean[A][B][C][D] - this.InstanceNormMean[A][B][C][D]);
                                     Delta2 += (this.ErrorMaps[E][A][B][C][D] * (-(this.NetFeatureMaps[E][A][B][C][D] - this.InstanceNormMean[A][B][C][D]) / Math.Pow((2.0 * (this.InstanceNormVar[A][B][C][D] + 0.000000001)), 1.5))) * (this.BatchVar[A][B][C][D] - this.InstanceNormVar[A][B][C][D]);
+
+                                    if(double.IsNaN(Delta) || double.IsNaN(Delta2))
+                                    {
+                                        break;
+                                    }
                                 }
 
                                 E++;
@@ -549,6 +574,11 @@ namespace MaddoxNet2
 
                     Delta = this.NeuralNet.LearningRate * (B1Corrected / (Math.Sqrt(B2Corrected + 0.000000001)));
 
+                    if(double.IsNaN(Delta))
+                    {
+                        break;
+                    }
+
                     this.LayerBatchMomentum[A] -= Delta;
 
                     this.LayerBatchMomentum[A] = Math.Min(Math.Max(0.001, this.LayerBatchMomentum[A]), 0.999);
@@ -559,9 +589,9 @@ namespace MaddoxNet2
             }
         }
 
-        public void NormalizeLayer(int LayerID, bool Inference = false)
+        public void NormalizeLayer(int LayerID, bool Inference,int TrueBatchSize)
         {
-            double[][][][] Output = this.CreateEmptyMapListBatch(this.NetFeatureMaps[0][LayerID][0].Length, this.NetFeatureMaps[0][LayerID].Length, this.NetFeatureMaps.Length);
+            double[][][][] Output = this.CreateEmptyMapListBatch(this.NetFeatureMaps[0][LayerID][0].Length, this.NetFeatureMaps[0][LayerID].Length, TrueBatchSize);
             double[][][] Mean = this.CreateEmptyMapList(this.NetFeatureMaps[0][LayerID][0].Length, this.NetFeatureMaps[0][LayerID].Length);
             double[][][] Variance = this.CreateEmptyMapList(this.NetFeatureMaps[0][LayerID][0].Length, this.NetFeatureMaps[0][LayerID].Length);
             int A = 0;
@@ -569,9 +599,9 @@ namespace MaddoxNet2
             int C = 0;
             int D = 0;
             double TempVal = 0;
-            double Momentum = 0.5;
+            double Momentum = 0.1;
 
-            //Momentum = this.InstanceNormMomentum;
+            Momentum = this.LayerBatchMomentum[LayerID];
 
             //Inference = false;
 
@@ -656,12 +686,16 @@ namespace MaddoxNet2
                             {
                                 this.NormalizedFeatureMaps[A][LayerID][B][C][D] = (this.NetFeatureMaps[A][LayerID][B][C][D] - Mean[B][C][D]) / (Math.Sqrt(Variance[B][C][D] + 0.000000001));
 
-
                                 A++;
                             }
 
                             this.InstanceNormMean[LayerID][B][C][D] = (1.0 - Momentum) * this.InstanceNormMean[LayerID][B][C][D] + (Momentum) * Mean[B][C][D];
                             this.InstanceNormVar[LayerID][B][C][D] = (1.0 - Momentum) * this.InstanceNormVar[LayerID][B][C][D] + (Momentum) * Variance[B][C][D];
+
+                            if((this.InstanceNormVar[LayerID][B][C][D]) < 0)
+                            {
+                                break;
+                            }
 
                             D++;
                         }
@@ -673,7 +707,8 @@ namespace MaddoxNet2
                 }
 
 
-
+                this.BatchMean[LayerID] = Mean;
+                this.BatchVar[LayerID] = Variance;
 
             }
             else
@@ -694,6 +729,7 @@ namespace MaddoxNet2
                             D = 0;
                             while (D < Output[0][0][0].Length)
                             {
+
                                 this.NormalizedFeatureMaps[A][LayerID][B][C][D] = (this.NetFeatureMaps[A][LayerID][B][C][D] - Mean[B][C][D]) / (Math.Sqrt(Variance[B][C][D] + 0.0000000001));
 
 
@@ -722,6 +758,8 @@ namespace MaddoxNet2
             double[] SubTransitionValues;
             double[] FlattenedValues;
             double TempVal = 0;
+            double TempMean = 0;
+            double TempVar = 0;
 
 
             A = 0;
@@ -743,8 +781,8 @@ namespace MaddoxNet2
                     C++;
                 }
 
-                this.NormalizeLayer(A, Inference);
-                this.ScaleAndShiftLayer(A);
+                this.NormalizeLayer(A, Inference, Inputs.Length);
+                this.ScaleAndShiftLayer(A, Inputs.Length);
 
 
                 C = 0;
@@ -795,7 +833,7 @@ namespace MaddoxNet2
 
             this.TransitionValues = TransitionValues;
 
-            //this.NeuralNet.ForwardPropagate(TransitionValues, Inference);
+            this.NeuralNet.ForwardPropagate(TransitionValues, Inference);
 
         }
 
@@ -1058,10 +1096,13 @@ namespace MaddoxNet2
             {
                 ApplyGradients(UseGradientDescent);
                 UpdateGammaAndBeta(OptimizerID, UseGradientDescent);
+                //UpdateBatchMomentum();
+
+                this.IterationCounter++;
             }
 
 
-            this.IterationCounter++;
+            
         }
 
         public void UpdateGammaAndBeta(int OptimizerID, bool UseGradientDescent = true)
@@ -1189,6 +1230,11 @@ namespace MaddoxNet2
 
                             this.LastInstanceNormBeta2[B][C][D][E] = ((this.NeuralNet.B2 * this.LastInstanceNormBeta2[B][C][D][E] + (1.0 - this.NeuralNet.B2) * Math.Pow(Delta2[B][C][D][E], 2)));
                             B2Corrected = this.LastInstanceNormBeta2[B][C][D][E] / (1.0 - Math.Pow(this.NeuralNet.B2, this.IterationCounter));
+
+                            if(double.IsNaN((this.NeuralNet.LearningRate * (B1Corrected / (Math.Sqrt(B2Corrected + 0.000000001))))))
+                            {
+                                break;
+                            }
 
                             this.InstanceNormBeta[B][C][D][E] -= (this.NeuralNet.LearningRate * (B1Corrected / (Math.Sqrt(B2Corrected + 0.000000001))));
 
@@ -1445,6 +1491,7 @@ namespace MaddoxNet2
 
             NewFilters = this.Filters[Layerid];
             //NewFilters = this.RotateMapSet180(ref this.Filters[Layerid]);
+            Padding = (int)(this.LayerPadding[Layerid]);
 
             NewGradients = Gradients;
 
@@ -1454,17 +1501,17 @@ namespace MaddoxNet2
 
             //Padding = 0;
             //Padding = (int)Math.Floor(((OutputDims - 1) * Stride - NewFeatures[0][0].Length + NewFilters[0][0].Length) / 2.0);
-            Padding = (int)(this.LayerPadding[Layerid]);
+            
 
             X = 0;
             while (X < NewFeatures.Length)
             {
 
                 B = 0;
-                while (B < NewGradients[0].Length)
+                while (B < OutputDims)
                 {
                     C = 0;
-                    while (C < NewGradients[0].Length)
+                    while (C < OutputDims)
                     {
                         TempVal = 0;
                         F = 0;
@@ -1476,12 +1523,12 @@ namespace MaddoxNet2
                                 Z = 0;
                                 while (Z < NewFilters[0].Length)
                                 {
-                                    NewX = (B * Stride - Padding + Y);
-                                    NewY = (C * Stride - Padding + Z);
+                                    NewX = (B - Y + Padding) / Stride;
+                                    NewY = (C - Z + Padding) / Stride;
 
-                                    if (NewX >= 0 && NewY >= 0 && NewX < Output[0].Length && NewY < Output[0].Length)
+                                    if (NewX >= 0 && NewY >= 0 && NewX < NewGradients[0].Length && NewY < NewGradients[0].Length && (B-Y+Padding) % Stride == 0 && (C - Z + Padding) % Stride == 0)
                                     {
-                                        Output[X][NewX][NewY] += (NewFilters[F][Y][Z] * NewGradients[F][B][C]);
+                                        TempVal += (NewFilters[F][Y][Z] * NewGradients[F][NewX][NewY]);
                                     }
 
 
@@ -1496,7 +1543,7 @@ namespace MaddoxNet2
                         }
 
 
-                        //Output[X][B][C] += TempVal;
+                        Output[X][B][C] += TempVal;
 
                         C++;
                     }
@@ -2367,38 +2414,43 @@ namespace MaddoxNet2
             Padding = this.LayerPadding[LayerID];
             //Padding = 0;
 
-            //NewFeatures = Features;
+            if(Padding > 0)
+            {
+                //NewFeatures = this.PadLayerMaps(Features, (int)Padding);
+            }
+            
 
 
 
 
             TempVal = 0;
-            F = 0;
-            while (F < NewFeatures.Length)
+            X = 0;
+            while (X < NewGradients.Length)
             {
                 B = 0;
-                while (B < NewGradients[0].Length)
+                while (B < OutputDims)
                 {
                     C = 0;
-                    while (C < NewGradients[0].Length)
+                    while (C < OutputDims)
                     {
-                        X = 0;
-                        while (X < OutputCount)
+                        TempVal = 0;
+                        F = 0;
+                        while (F < NewFeatures.Length)
                         {
                             Y = 0;
-                            while (Y < OutputDims)
+                            while (Y < NewGradients[0].Length)
                             {
                                 Z = 0;
-                                while (Z < OutputDims)
+                                while (Z < NewGradients[0].Length)
                                 {
-                                    NewX = (int)(B * Stride + Y);
-                                    NewY = (int)(C * Stride + Z);
+                                    NewX = (int)(Y * Stride - Padding + B);
+                                    NewY = (int)(Z * Stride - Padding + C);
                                     //NewX = B * Stride + Y;
                                     //NewY = C * Stride + Z;
 
                                     if (NewX >= 0 && NewX < NewFeatures[0].Length && NewY >= 0 && NewY < NewFeatures[0].Length)
                                     {
-                                        Outputs3[X][Y][Z] += (NewFeatures[F][NewX][NewY] * NewGradients[X][B][C]);
+                                        TempVal += (NewFeatures[F][NewX][NewY] * NewGradients[X][Y][Z]);
                                     }
 
 
@@ -2409,8 +2461,10 @@ namespace MaddoxNet2
                                 Y++;
                             }
 
-                            X++;
+                            F++;
                         }
+
+                        Outputs3[X][B][C] += TempVal;
 
                         C++;
                     }
@@ -2418,7 +2472,7 @@ namespace MaddoxNet2
                     B++;
                 }
 
-                F++;
+                X++;
             }
 
 
@@ -2646,4 +2700,3 @@ namespace MaddoxNet2
         }
     }
 }
-
