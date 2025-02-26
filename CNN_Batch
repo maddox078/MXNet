@@ -526,7 +526,7 @@ namespace MaddoxNet2
 
             while(A < this.ErrorMaps[0].Length)
             {
-                Delta = 0;
+                
                 B = 0;
                 while(B < this.ErrorMaps[0][A].Length)
                 {
