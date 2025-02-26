@@ -303,8 +303,8 @@ namespace MaddoxNet2
 
                     if (A < this.Generator.Filters.Length - 1)
                     {
-                        this.Generator.NormalizeLayer(A, Inference);
-                        this.Generator.ScaleAndShiftLayer(A);
+                        this.Generator.NormalizeLayer(A, Inference,Inputs.Length);
+                        this.Generator.ScaleAndShiftLayer(A,Inputs.Length);
 
                         this.Generator.DerivativeFeatureMaps[C][A] = this.Generator.ActivateDerivativeConvolutions(ref this.Generator.NetFeatureMaps[C][A], this.Generator.ActivationFunctions[A]);
                         //this.Generator.NetFeatureMaps[C][A] = TempList;
@@ -864,7 +864,11 @@ namespace MaddoxNet2
             this.Generator.LastInstanceNormGamma2 = new double[FilterCounts.Length][][][];
             this.Generator.NormalizedFeatureMaps = new double[this.BatchSize][][][][];
             this.Generator.ScaledFeatureMaps = new double[this.BatchSize][][][][];
-
+            this.Generator.LayerBatchMomentum = new double[FilterCounts.Length];
+            this.Generator.LayerBatchMomentumADAM1 = new double[FilterCounts.Length];
+            this.Generator.LayerBatchMomentumADAM2 = new double[FilterCounts.Length];
+            this.Generator.BatchMean = new double[FilterCounts.Length][][][];
+            this.Generator.BatchVar = new double[FilterCounts.Length][][][];
 
             while (Q < this.BatchSize)
             {
