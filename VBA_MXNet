@@ -1,0 +1,631 @@
+Option Explicit
+
+Option Base 0
+
+Private Weights() As Double
+Private Activations() As Double
+Private NetInputs() As Double
+Private Errors() As Double
+Private Derivatives() As Double
+Private Bias() As Double
+Private BiasDelta() As Double
+Private BiasMean() As Double
+Private BiasVar() As Double
+Private WeightDeltas() As Double
+Private DeltaMean() As Double
+Private DeltaVar() As Double
+Private ActivationFunctions() As Integer
+Private NeuronCounts() As Long
+Private LearningRate As Double
+Private ReLUConst As Double
+Private LayerDims() As Long
+Private BatchIteration As Long
+Private WeightStarts() As Long
+Private NeuronStarts() As Long
+Private MasterInput() As Double
+Private MasterOutput() As Double
+
+Public Sub AssignDataSets(InputSet As Variant, OutputSet As Variant)
+    Dim X As Long
+    Dim Y As Long
+    
+    ReDim MasterInput(UBound(InputSet) - 1, UBound(InputSet, 2) - 1)
+    ReDim MasterOutput(UBound(OutputSet) - 1, UBound(OutputSet, 2) - 1)
+    
+    For X = 1 To UBound(InputSet)
+        For Y = 1 To UBound(InputSet, 2)
+            MasterInput(X - 1, Y - 1) = InputSet(X, Y)
+        Next Y
+        
+        For Y = 1 To UBound(OutputSet, 2)
+            MasterOutput(X - 1, Y - 1) = OutputSet(X, Y)
+        Next Y
+    Next X
+    
+    Debug.Print "Loaded " & CStr(UBound(MasterInput, 1)) & " Rows and " & CStr(UBound(MasterInput, 2)) & " columns"
+End Sub
+
+Public Function GetOutputRow() As Double()
+    Dim Output() As Double
+    Dim X As Long
+    Dim Y As Long
+    
+    ReDim Output(LayerDims(UBound(LayerDims)) - 1)
+    
+    For X = 0 To LayerDims(UBound(LayerDims)) - 1
+        Output(X) = Activations(NeuronStarts(UBound(LayerDims)) + X)
+    Next X
+    
+    GetOutputRow = Output
+End Function
+
+Public Function Instantiate() As MXNet
+    Set Instantiate = New MXNet
+End Function
+
+Public Sub Initialize(LayerCounts() As Long, ActivationFuncs() As Integer, LearnRate As Double)
+    Dim X As Integer
+    Dim Y As Integer
+    Dim Z As Integer
+    Dim LayerActivations() As Double
+    Dim LayerNetInputs() As Double
+    Dim LayerError() As Double
+    Dim LayerWeights() As Double
+    Dim NeuronWeights() As Double
+    Dim PrevLayerNeuronCount As Integer
+    Dim LayerCount As Integer
+    Dim WeightTotal As Long
+    Dim NeuronTotal As Long
+    
+    LayerCount = UBound(LayerCounts)
+    NeuronCounts = LayerCounts
+    ActivationFunctions = ActivationFuncs
+    LayerDims = LayerCounts
+    
+    Randomize
+    
+    LearningRate = LearnRate
+    ReLUConst = 0.01
+    BatchIteration = 1
+    
+    WeightTotal = 0
+    X = 1
+    While X <= LayerCount
+        WeightTotal = WeightTotal + (LayerCounts(X) * LayerCounts(X - 1))
+        
+        X = X + 1
+    Wend
+    
+    WeightTotal = WeightTotal - 1
+    
+    ReDim NeuronStarts(LayerCount)
+    ReDim WeightStarts(LayerCount)
+    
+    ReDim Weights(WeightTotal)
+    ReDim WeightDeltas(WeightTotal)
+    ReDim DeltaMean(WeightTotal)
+    ReDim DeltaVar(WeightTotal)
+    
+    
+    NeuronTotal = 0
+    X = 0
+    While X <= LayerCount
+        NeuronTotal = NeuronTotal + LayerCounts(X)
+        
+        NeuronStarts(X) = NeuronStart(CLng(X))
+        WeightStarts(X) = WeightStart(CLng(X))
+        
+        X = X + 1
+    Wend
+    
+    NeuronTotal = NeuronTotal - 1
+    
+    ReDim Activations(NeuronTotal)
+    ReDim NetInputs(NeuronTotal)
+    ReDim Errors(NeuronTotal)
+    ReDim Derivatives(NeuronTotal)
+    ReDim Bias(NeuronTotal)
+    ReDim BiasDelta(NeuronTotal)
+    ReDim BiasMean(NeuronTotal)
+    ReDim BiasVar(NeuronTotal)
+    
+    InitWeights
+End Sub
+
+Public Sub InitWeights()
+    Dim X As Long
+    Dim Y As Long
+    Dim Z As Long
+    Dim StdDev As Double
+    Dim Offset As Long
+    
+    X = 1
+    While X <= UBound(LayerDims)
+        StdDev = Sqr(1# / LayerDims(X - 1))
+        Offset = WeightStart(X)
+        
+        Y = 0
+        While Y < LayerDims(X)
+            Z = 0
+            While Z < LayerDims(X - 1)
+                Weights(Offset + Y * LayerDims(X - 1) + Z) = RandNormal(0#, StdDev)
+                
+                Z = Z + 1
+            Wend
+            
+            Y = Y + 1
+        Wend
+        
+        X = X + 1
+    Wend
+End Sub
+
+Public Function RandNormal(Mean As Double, StdDev As Double)
+    Dim U1 As Double
+    Dim U2 As Double
+
+    U1 = Rnd()
+    U2 = Rnd()
+
+    If U1 < 0.0000001 Then
+        U1 = 0.00000001
+    End If
+
+    RandNormal = Mean + StdDev * Sqr(-2# * Log(U1)) * Cos(6.28318530718 * U2)
+End Function
+
+Public Function WeightStart(LayerID As Long) As Long
+    Dim Offset As Long
+    Dim X As Long
+    
+    X = 1
+    While X < LayerID
+        Offset = Offset + (LayerDims(X) * LayerDims(X - 1))
+        
+        X = X + 1
+    Wend
+    
+    WeightStart = Offset
+End Function
+
+Public Function NeuronStart(LayerID As Long) As Long
+    Dim Offset As Long
+    Dim X As Long
+    
+    X = 0
+    While X < LayerID
+        Offset = Offset + LayerDims(X)
+        
+        X = X + 1
+    Wend
+    
+    NeuronStart = Offset
+End Function
+
+Public Sub ActivationFunction(LayerID As Long, ActivationID As Integer)
+    Dim X As Long
+    Dim LayerEnd As Long
+    
+    If LayerID = UBound(LayerDims) Then
+        LayerEnd = UBound(Activations) + 1
+    Else
+        LayerEnd = NeuronStarts(LayerID + 1)
+    End If
+    
+    X = NeuronStarts(LayerID)
+    While X < LayerEnd
+        Select Case ActivationID
+            Case 0
+                'Manual TanH Implementation
+                Activations(X) = TanH(NetInputs(X))
+            Case 1
+                'Sigmoid
+                Dim TempVal As Double
+                TempVal = Exp(NetInputs(X))
+                
+                Activations(X) = TempVal / (1# + TempVal)
+            Case 2
+                If NetInputs(X) > 0# Then
+                    Activations(X) = NetInputs(X)
+                Else
+                    Activations(X) = ReLUConst * (Exp(NetInputs(X)) - 1#)
+                End If
+            Case 3
+                'ReLU
+                If NetInputs(X) > 0# Then
+                    Activations(X) = NetInputs(X)
+                Else
+                    Activations(X) = ReLUConst * NetInputs(X)
+                End If
+                
+                
+            Case Else
+                Activations(X) = NetInputs(X)
+        End Select
+    
+        X = X + 1
+    Wend
+End Sub
+
+Public Sub ActivationFunctionDerivative(LayerID As Long, ActivationID As Integer)
+    Dim Output As Double
+    Dim X As Long
+    Dim LayerEnd As Long
+    
+    
+    If LayerID = UBound(LayerDims) Then
+        LayerEnd = UBound(Activations) + 1
+    Else
+        LayerEnd = NeuronStarts(LayerID + 1)
+    End If
+    
+    X = NeuronStarts(LayerID)
+    
+    While X < LayerEnd
+        Select Case ActivationID
+            Case 0
+                Output = Activations(X)
+                Derivatives(X) = 1# - (Output * Output)
+            Case 1
+                Output = 1# / (1# + Exp(-NetInputs(X)))
+                Derivatives(X) = Output * (1# - Output)
+            Case 2
+                If NetInputs(X) > 0# Then
+                    Derivatives(X) = 1#
+                Else
+                    Derivatives(X) = Activations(X) + ReLUConst
+                End If
+            Case 3
+                If NetInputs(X) > 0 Then
+                    Derivatives(X) = 1#
+                Else
+                    Derivatives(X) = ReLUConst
+                End If
+            Case Else
+                Derivatives(X) = 1#
+        End Select
+        
+        X = X + 1
+    Wend
+
+End Sub
+
+Public Function TanH(InputVal As Double)
+            If InputVal > 20# Then
+                TanH = 1#
+                Exit Function
+            ElseIf InputVal < -20# Then
+                TanH = -1#
+                Exit Function
+            End If
+            
+            Dim e2x As Double
+            e2x = Exp(2# * InputVal)
+            
+            TanH = (e2x - 1#) / (e2x + 1#)
+End Function
+
+Public Sub Forward(DataSetIndex As Long)
+    Dim X As Long, Y As Long, Z As Long
+    Dim LayerOffset As Long, PrevLayerOffset As Long
+    Dim TgtIndex As Long, NetSum As Double
+    
+    X = 0
+    While X < LayerDims(0)
+        NetInputs(X) = MasterInput(DataSetIndex, X)
+        Activations(X) = NetInputs(X)      ' Input layer: pass through
+        Derivatives(X) = 1#
+        X = X + 1
+    Wend
+    
+    X = 1
+    While X <= UBound(LayerDims)
+        LayerOffset = NeuronStarts(X)
+        PrevLayerOffset = NeuronStarts(X - 1)
+        
+        Y = 0
+        While Y < LayerDims(X)
+            NetSum = 0
+            Z = 0
+            While Z < LayerDims(X - 1)
+                NetSum = NetSum + (Weights(WeightStarts(X) + Y * LayerDims(X - 1) + Z) * Activations(PrevLayerOffset + Z))
+                Z = Z + 1
+            Wend
+            TgtIndex = LayerOffset + Y
+            NetInputs(TgtIndex) = NetSum + Bias(TgtIndex)
+            
+            'Activations(TgtIndex) = ActivationFunction(NetInputs(TgtIndex), ActivationFunctions(X))
+            'Derivatives(TgtIndex) = ActivationFunctionDerivative(NetInputs(TgtIndex), ActivationFunctions(X))
+            Y = Y + 1
+        Wend
+        
+        ActivationFunction X, ActivationFunctions(X)
+        ActivationFunctionDerivative X, ActivationFunctions(X)
+        
+        X = X + 1
+    Wend
+End Sub
+
+Public Sub Backward(DataSetIndex As Long)
+    Dim X As Long, Y As Long, Z As Long, ZZ As Long
+    Dim NetSum As Double
+    Dim WeightOffset As Long, NextWeightOffset As Long
+    Dim LayerOffset As Long, NextLayerOffset As Long, PrevLayerOffset As Long
+    Dim TgtIndex As Long, TgtIndex2 As Long
+    Dim Offset As Long
+    
+    Forward DataSetIndex
+    
+    ' Output layer error + weight deltas
+    Offset = NeuronStart(UBound(LayerDims))
+    X = 0
+    While X < LayerDims(UBound(LayerDims))
+        TgtIndex = Offset + X
+        Errors(TgtIndex) = (Activations(TgtIndex) - MasterOutput(DataSetIndex, X)) * Derivatives(TgtIndex)
+        BiasDelta(TgtIndex) = Errors(TgtIndex)
+        
+        WeightOffset = WeightStarts(UBound(LayerDims))
+        Y = 0
+        While Y < LayerDims(UBound(LayerDims) - 1)
+            TgtIndex2 = WeightOffset + X * LayerDims(UBound(LayerDims) - 1) + Y
+            WeightDeltas(TgtIndex2) = WeightDeltas(TgtIndex2) + (Errors(TgtIndex) * Activations(NeuronStarts(UBound(LayerDims) - 1) + Y))
+
+            Y = Y + 1
+        Wend
+        X = X + 1
+    Wend
+    
+    ' Hidden layers (stop at 1, not 0; start at second-to-last, not last-1)
+    X = UBound(LayerDims) - 1
+    While X >= 1                           ' Fix: was >= 0
+        LayerOffset = NeuronStarts(X)
+        PrevLayerOffset = NeuronStarts(X - 1)
+        NextLayerOffset = NeuronStarts(X + 1)
+        NextWeightOffset = WeightStarts(X + 1)
+        WeightOffset = WeightStarts(X)
+        
+        Y = 0
+        While Y < LayerDims(X)
+            NetSum = 0#
+            Z = 0
+            While Z < LayerDims(X + 1)
+                TgtIndex = NextWeightOffset + Z * LayerDims(X) + Y
+                NetSum = NetSum + Errors(NextLayerOffset + Z) * Weights(TgtIndex)
+                Z = Z + 1
+            Wend
+            
+            Errors(LayerOffset + Y) = NetSum * Derivatives(LayerOffset + Y)
+            BiasDelta(LayerOffset + Y) = Errors(LayerOffset + Y)
+            
+            ZZ = 0
+            While ZZ < LayerDims(X - 1)
+                TgtIndex = WeightOffset + Y * LayerDims(X - 1) + ZZ
+                WeightDeltas(TgtIndex) = WeightDeltas(TgtIndex) + (Errors(LayerOffset + Y) * Activations(PrevLayerOffset + ZZ))
+                
+                ZZ = ZZ + 1
+            Wend
+            
+            Y = Y + 1
+        Wend
+        X = X - 1
+    Wend
+    
+    ApplyGradientDeltas
+End Sub
+Public Sub ApplyGradientDeltas()
+    Dim B1Corrected As Double
+    Dim B2Corrected As Double
+    Dim TempVal As Double
+    Dim LayerOffset As Long
+    Dim NeuronOffset As Long
+    Dim TgtIndex As Long
+    Dim X As Long
+    Dim Y As Long
+    Dim Z As Long
+    Dim BatchIterVal As Double
+    Dim BatchIterVal2 As Double
+    
+    BatchIterVal = 1# - 0.9 ^ BatchIteration
+    BatchIterVal2 = 1# - 0.999 ^ BatchIteration
+    
+    X = 1
+    While X <= UBound(LayerDims)
+        LayerOffset = WeightStarts(X)
+        NeuronOffset = NeuronStarts(X)
+        
+        Y = 0
+        While Y < LayerDims(X)
+            Z = 0
+            While Z < LayerDims(X - 1)
+                TgtIndex = LayerOffset + Y * LayerDims(X - 1) + Z
+                
+                DeltaMean(TgtIndex) = (0.9 * DeltaMean(TgtIndex)) + ((1# - 0.9) * WeightDeltas(TgtIndex))
+                B1Corrected = DeltaMean(TgtIndex) / BatchIterVal
+                
+                DeltaVar(TgtIndex) = (0.999 * DeltaVar(TgtIndex)) + ((1# - 0.999) * (WeightDeltas(TgtIndex) * WeightDeltas(TgtIndex)))
+                B2Corrected = DeltaVar(TgtIndex) / BatchIterVal2
+                
+                TempVal = LearningRate * (B1Corrected / (Sqr(B2Corrected) + 0.00000001))
+                
+                Weights(TgtIndex) = Weights(TgtIndex) - TempVal
+                
+                WeightDeltas(TgtIndex) = 0
+                
+                Z = Z + 1
+            Wend
+            
+            TgtIndex = NeuronOffset + Y
+            BiasMean(TgtIndex) = (0.9 * BiasMean(TgtIndex)) + ((1# - 0.9) * BiasDelta(TgtIndex))
+            B1Corrected = BiasMean(TgtIndex) / BatchIterVal
+            
+            BiasVar(TgtIndex) = (0.999 * BiasVar(TgtIndex)) + ((1# - 0.999) * (BiasDelta(TgtIndex) * BiasDelta(TgtIndex)))
+            B2Corrected = BiasVar(TgtIndex) / BatchIterVal2
+            
+            TempVal = LearningRate * (B1Corrected / (Sqr(B2Corrected) + 0.00000001))
+            
+            Bias(TgtIndex) = Bias(TgtIndex) - TempVal
+
+            BiasDelta(TgtIndex) = 0
+            
+            Y = Y + 1
+        Wend
+        
+        X = X + 1
+    Wend
+    
+    BatchIteration = BatchIteration + 1
+End Sub
+
+Public Sub SaveNetwork(SheetName As String)
+    Dim ws As Worksheet
+    Dim Row As Long
+    Dim X As Long
+    
+    Set ws = ThisWorkbook.Sheets(SheetName)
+    ws.Cells.Clear
+    Row = 1
+    
+    ' Save metadata
+    ws.Cells(Row, 1).Value = "BatchIteration"
+    ws.Cells(Row, 2).Value = BatchIteration
+    Row = Row + 1
+    
+    ws.Cells(Row, 1).Value = "LearningRate"
+    ws.Cells(Row, 2).Value = LearningRate
+    Row = Row + 1
+    
+    ' Save layer dims
+    For X = 0 To UBound(LayerDims)
+        ws.Cells(Row, 1).Value = "LayerDims"
+        ws.Cells(Row, 2).Value = X
+        ws.Cells(Row, 3).Value = LayerDims(X)
+        Row = Row + 1
+    Next X
+    
+    ' Save activation functions
+    For X = 0 To UBound(ActivationFunctions)
+        ws.Cells(Row, 1).Value = "ActivationFunction"
+        ws.Cells(Row, 2).Value = X
+        ws.Cells(Row, 3).Value = ActivationFunctions(X)
+        Row = Row + 1
+    Next X
+    
+    ' Save weights
+    For X = 0 To UBound(Weights)
+        ws.Cells(Row, 1).Value = "Weight"
+        ws.Cells(Row, 2).Value = X
+        ws.Cells(Row, 3).Value = Weights(X)
+        Row = Row + 1
+    Next X
+    
+    ' Save biases
+    For X = 0 To UBound(Bias)
+        ws.Cells(Row, 1).Value = "Bias"
+        ws.Cells(Row, 2).Value = X
+        ws.Cells(Row, 3).Value = Bias(X)
+        Row = Row + 1
+    Next X
+    
+    ' Save Adam moments if you want to resume training
+    For X = 0 To UBound(DeltaMean)
+        ws.Cells(Row, 1).Value = "DeltaMean"
+        ws.Cells(Row, 2).Value = X
+        ws.Cells(Row, 3).Value = DeltaMean(X)
+        Row = Row + 1
+    Next X
+    
+    For X = 0 To UBound(DeltaVar)
+        ws.Cells(Row, 1).Value = "DeltaVar"
+        ws.Cells(Row, 2).Value = X
+        ws.Cells(Row, 3).Value = DeltaVar(X)
+        Row = Row + 1
+    Next X
+    
+    For X = 0 To UBound(BiasMean)
+        ws.Cells(Row, 1).Value = "BiasMean"
+        ws.Cells(Row, 2).Value = X
+        ws.Cells(Row, 3).Value = BiasMean(X)
+        Row = Row + 1
+    Next X
+    
+    For X = 0 To UBound(BiasVar)
+        ws.Cells(Row, 1).Value = "BiasVar"
+        ws.Cells(Row, 2).Value = X
+        ws.Cells(Row, 3).Value = BiasVar(X)
+        Row = Row + 1
+    Next X
+    
+    Debug.Print "Network saved, " & Row & " rows written"
+End Sub
+
+Public Sub LoadNetwork(SheetName As String)
+    Dim ws As Worksheet
+    Dim Row As Long
+    Dim Key As String
+    Dim Idx As Long
+    Dim Val As Double
+    Dim LastRow As Long
+    
+    Set ws = ThisWorkbook.Sheets(SheetName)
+    LastRow = ws.Cells(ws.Rows.Count, 1).End(xlUp).Row
+    
+    ' First pass - read LayerDims and ActivationFunctions to initialize arrays
+    Dim TempLayerDims() As Long
+    Dim TempActs() As Integer
+    Dim LayerCount As Long
+    LayerCount = 0
+    
+    For Row = 1 To LastRow
+        If ws.Cells(Row, 1).Value = "LayerDims" Then
+            LayerCount = LayerCount + 1
+        End If
+    Next Row
+    
+    ReDim TempLayerDims(LayerCount - 1)
+    ReDim TempActs(LayerCount - 1)
+    
+    For Row = 1 To LastRow
+        Key = ws.Cells(Row, 1).Value
+        If Key = "LayerDims" Then
+            Idx = ws.Cells(Row, 2).Value
+            TempLayerDims(Idx) = ws.Cells(Row, 3).Value
+        End If
+        If Key = "ActivationFunction" Then
+            Idx = ws.Cells(Row, 2).Value
+            TempActs(Idx) = ws.Cells(Row, 3).Value
+        End If
+        If Key = "LearningRate" Then
+            LearningRate = ws.Cells(Row, 2).Value
+        End If
+        If Key = "BatchIteration" Then
+            BatchIteration = ws.Cells(Row, 2).Value
+        End If
+    Next Row
+    
+    ' Initialize allocates all arrays with correct dimensions
+    Initialize TempLayerDims, TempActs, LearningRate
+    
+    ' Restore BatchIteration since Initialize resets it to 1
+    For Row = 1 To LastRow
+        If ws.Cells(Row, 1).Value = "BatchIteration" Then
+            BatchIteration = ws.Cells(Row, 2).Value
+        End If
+    Next Row
+    
+    ' Second pass - load weights and biases over initialized arrays
+    For Row = 1 To LastRow
+        Key = ws.Cells(Row, 1).Value
+        Idx = ws.Cells(Row, 2).Value
+        
+        Select Case Key
+            Case "Weight":      Weights(Idx) = ws.Cells(Row, 3).Value
+            Case "Bias":        Bias(Idx) = ws.Cells(Row, 3).Value
+            Case "DeltaMean":   DeltaMean(Idx) = ws.Cells(Row, 3).Value
+            Case "DeltaVar":    DeltaVar(Idx) = ws.Cells(Row, 3).Value
+            Case "BiasMean":    BiasMean(Idx) = ws.Cells(Row, 3).Value
+            Case "BiasVar":     BiasVar(Idx) = ws.Cells(Row, 3).Value
+        End Select
+    Next Row
+    
+    Debug.Print "Network loaded, BatchIteration = " & BatchIteration
+End Sub
